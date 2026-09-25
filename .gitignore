@@ -1,0 +1,27 @@
+# ── Frontend ──────────────────────────────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+
+# ── Backend ───────────────────────────────────────────────────────────────────
+backend/target/
+backend/.quarkus/
+*.class
+*.jar
+!**/test-lib/*.jar
+
+# ── IDE / OS ──────────────────────────────────────────────────────────────────
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+
+# ── Docker volumes / local data ───────────────────────────────────────────────
+.docker-data/
+
+# ── Env secrets ───────────────────────────────────────────────────────────────
+.env
+!.env.example

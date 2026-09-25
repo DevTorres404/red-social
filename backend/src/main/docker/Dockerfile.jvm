@@ -1,0 +1,22 @@
+####
+# JVM Dockerfile — build with: docker build -f src/main/docker/Dockerfile.jvm -t red-social-backend .
+###
+FROM eclipse-temurin:21-jre-alpine
+
+WORKDIR /deployments
+
+# Add non-root user
+RUN addgroup -S quarkus && adduser -S quarkus -G quarkus
+USER quarkus
+
+COPY --chown=quarkus:quarkus target/quarkus-app/lib/ ./lib/
+COPY --chown=quarkus:quarkus target/quarkus-app/*.jar ./
+COPY --chown=quarkus:quarkus target/quarkus-app/app/ ./app/
+COPY --chown=quarkus:quarkus target/quarkus-app/quarkus/ ./quarkus/
+
+EXPOSE 8080
+
+ENV JAVA_OPTS_APPEND="-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
+ENV JAVA_APP_JAR="quarkus-run.jar"
+
+ENTRYPOINT ["java", "-jar", "quarkus-run.jar"]

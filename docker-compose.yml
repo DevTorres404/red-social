@@ -1,0 +1,114 @@
+services:
+  # ── Graph Database ────────────────────────────────────────────────────────────
+  neo4j:
+    image: neo4j:5
+    container_name: red-social-neo4j
+    restart: unless-stopped
+    ports:
+      - "7474:7474"   # Neo4j Browser
+      - "7687:7687"   # Bolt protocol
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-changeme}
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_security_procedures_unrestricted: "apoc.*"
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "${NEO4J_PASSWORD:-changeme}", "RETURN 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # ── Object Storage (S3-compatible) ────────────────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: red-social-minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # MinIO Console UI
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # ── MinIO bucket init (one-shot) ───────────────────────────────────────────────
+  minio-init:
+    image: minio/mc:latest
+    container_name: red-social-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin};
+        mc mb --ignore-existing local/${MINIO_BUCKET:-red-social};
+        mc anonymous set download local/${MINIO_BUCKET:-red-social};
+        exit 0;
+      "
+
+  # ── Quarkus Backend ───────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: src/main/docker/Dockerfile.jvm
+    container_name: red-social-backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    environment:
+      QUARKUS_PROFILE: prod
+      # Neo4j
+      QUARKUS_NEO4J_URI: bolt://neo4j:7687
+      QUARKUS_NEO4J_AUTHENTICATION_USERNAME: ${NEO4J_USER:-neo4j}
+      QUARKUS_NEO4J_AUTHENTICATION_PASSWORD: ${NEO4J_PASSWORD:-changeme}
+      # MinIO / S3
+      QUARKUS_S3_ENDPOINT_OVERRIDE: http://minio:9000
+      QUARKUS_S3_AWS_REGION: ${AWS_REGION:-us-east-1}
+      QUARKUS_S3_AWS_CREDENTIALS_TYPE: static
+      QUARKUS_S3_AWS_CREDENTIALS_STATIC_PROVIDER_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      QUARKUS_S3_AWS_CREDENTIALS_STATIC_PROVIDER_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      APP_MINIO_BUCKET: ${MINIO_BUCKET:-red-social}
+      # JWT
+      MP_JWT_VERIFY_PUBLICKEY_LOCATION: /deployments/config/public.pem
+      APP_JWT_SECRET: ${JWT_SECRET}
+      # Web Push VAPID
+      APP_VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      APP_VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      APP_VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@redsocial.dev}
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/q/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # ── React Frontend ────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: red-social-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  neo4j_data:
+  neo4j_logs:
+  minio_data:
