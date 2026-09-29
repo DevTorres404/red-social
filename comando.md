@@ -63,6 +63,20 @@ El proyecto Compose se llama `orbit-prod` y crea volúmenes nuevos. Las imágene
 
 Comprueba también desde dos navegadores en `https://orbit.labtorres.me` que funcionan login, recarga de sesión, una imagen y mensajes WebSocket. La URL firmada de un post debe empezar con `https://media.orbit.labtorres.me/`, abrirse antes de 60 segundos y rechazarse después; en la respuesta, comprueba `Cache-Control: private, no-store` y que Cloudflare no la sirva desde caché. Los avatares se sirven desde `/<bucket>/avatars/`. La consola RustFS y Neo4j no se publican.
 
+### Si las rutas públicas fallan
+
+Si `orbit.labtorres.me` responde **502**, primero confirma que el frontend responde en el servidor y que `cloudflared` apunta exactamente a `http://127.0.0.1:3000`. Si `media.orbit.labtorres.me` falla durante el **handshake TLS** (sin respuesta HTTP), comprueba en Cloudflare que haya un certificado de borde **activo que incluya exactamente `media.orbit.labtorres.me`**. Mantén este hostname; no lo sustituyas por otro ni desactives la validación TLS como solución. Al ser un subdominio de varios niveles, no des por hecho que el certificado Universal SSL de la zona lo cubre. Después verifica que la ruta del túnel apunte a `http://127.0.0.1:9000`.
+
+```bash
+docker compose -f docker-compose.prod.yml ps
+curl -fsS http://127.0.0.1:3000/login -o /dev/null -w 'Frontend local: %{http_code}\n'
+curl -fsS http://127.0.0.1:9000/health -o /dev/null -w 'RustFS local: %{http_code}\n'
+sudo systemctl status cloudflared --no-pager
+sudo journalctl -u cloudflared -n 100 --no-pager
+```
+
+Si ambas pruebas locales dan 200 pero las públicas no, revisa las rutas publicadas, el estado del túnel y el certificado en Cloudflare; reiniciar los contenedores no corrige por sí solo un error de TLS en el borde.
+
 ## 3. Operación habitual
 
 ```bash
