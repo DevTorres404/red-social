@@ -14,6 +14,13 @@ const toneBackgrounds = ['#e6e0ff', '#f7def4', '#dde8ff', '#e7dcfa'];
 const toneColors = ['#5a45ac', '#9d4e9a', '#4a64ae', '#7854a9'];
 const MAX_AVATAR_BYTES = 6 * 1024 * 1024;
 const EMPTY_CONNECTIONS = { users: [], total: 0, page: 0, size: 4 };
+const wordCount = value => value.trim() ? value.trim().split(/\s+/).length : 0;
+
+function SocialIcon({ network }) {
+  if (network === 'instagram') return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle className="social-icon-dot" cx="17.5" cy="6.5" r="1"/></svg>;
+  if (network === 'reddit') return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5.2 14 5l1.2 4.1M5 10.2C6.7 8.8 9.2 8 12 8s5.3.8 7 2.2"/><path d="M4 13.2c0-2.1 3.6-3.8 8-3.8s8 1.7 8 3.8-3.6 5.1-8 5.1-8-3-8-5.1Z"/><circle cx="9" cy="13" r=".8"/><circle cx="15" cy="13" r=".8"/><path d="M9 16c1.7 1.1 4.3 1.1 6 0M18.5 10.4l2-1.2"/><circle cx="21" cy="8.7" r="1.4"/></svg>;
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.3 5.2a17 17 0 0 0-4.2-1.3l-.5 1a15 15 0 0 0-5.2 0l-.5-1a17 17 0 0 0-4.2 1.3C2.1 9 1.4 12.8 1.7 16.5a17 17 0 0 0 5.2 2.6l1.1-1.8-1.7-.8.4-.3a12 12 0 0 0 10.6 0l.4.3-1.7.8 1.1 1.8a17 17 0 0 0 5.2-2.6c.4-4.3-.7-8-3-11.3Z"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/></svg>;
+}
 
 function Avatar({ username, avatarUrl, tone = 0, className = '', size = 'md' }) {
   const bg = toneBackgrounds[tone % 4];
@@ -237,11 +244,10 @@ export default function ProfilePage() {
               <textarea
                 id="profile-bio"
                 value={bioDraft}
-                maxLength={160}
                 onChange={event => setBioDraft(event.target.value)}
                 placeholder="Cuéntanos algo sobre ti..."
               />
-              <span className="profile-bio-counter">{bioDraft.length}/160</span>
+              <span className="profile-bio-counter">{wordCount(bioDraft)}/160 palabras</span>
               {_saveError && <p role="alert" className="profile-edit-error">{_saveError}</p>}
               <div className="profile-edit-actions">
                 <button type="submit" disabled={_saving} className="network-btn network-btn-primary">
@@ -251,8 +257,9 @@ export default function ProfilePage() {
               </div>
             </form>
           ) : (
-            <p className="profile-bio-main">{profile.bio || (isMe ? 'Añade una biografía para que tu comunidad te conozca.' : 'Aún no ha añadido una biografía.')}</p>
+            <p className="profile-bio-main">{profile.bio || (profile.bioFollowersOnly && !isMe && !isFollowingProfile ? 'Biografía visible solo para sus seguidores.' : (isMe ? 'Añade una biografía para que tu comunidad te conozca.' : 'Aún no ha añadido una biografía.'))}</p>
           )}
+          {!editing && !(profile.bioFollowersOnly && !isMe && !isFollowingProfile) && <div className="profile-social-links">{['instagram','reddit','discord'].filter(network => profile[network]).map(network => <span className="profile-social-link" key={network} title={network}><SocialIcon network={network}/><span>@{profile[network]}</span></span>)}</div>}
 
           <div className="profile-hero-footer">
             <div className="profile-stats" aria-label="Resumen del perfil">

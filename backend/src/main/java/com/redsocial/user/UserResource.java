@@ -50,17 +50,47 @@ public class UserResource {
     @Inject
     MediaStorage mediaStorage;
 
-    public record UpdateProfileRequest(@Size(max = 160) String bio,
+    public record UpdateProfileRequest(String bio,
                                        @Size(max = 2048) String avatarUrl) {}
+    public record SettingsRequest(boolean profilePublic, boolean avatarFollowersOnly,
+            boolean circleFollowersOnly, boolean followersFollowersOnly, boolean bioFollowersOnly, boolean messagesFollowersOnly,
+            boolean interactionsFollowersOnly, @Size(max=40) String instagram,
+            @Size(max=40) String reddit, @Size(max=40) String discord) {}
+
+    @GET @Path("/me/settings")
+    public User.UserProfile mySettings() {
+        return userRepository.findById(currentUser.id()).orElseThrow().toProfile();
+    }
+
+    @PUT @Path("/me/settings")
+    public User.UserProfile updateSettings(@Valid SettingsRequest req) {
+        return userRepository.updateSettings(currentUser.id(), req.profilePublic(), req.avatarFollowersOnly(),
+                req.circleFollowersOnly(), req.followersFollowersOnly(), req.bioFollowersOnly(), req.messagesFollowersOnly(),
+                req.interactionsFollowersOnly(), cleanSocial(req.instagram()), cleanSocial(req.reddit()),
+                cleanSocial(req.discord())).toProfile();
+    }
+
+    private String cleanSocial(String value) { return value == null ? "" : value.trim().replaceFirst("^@", ""); }
 
     @GET
     @Path("/{id}")
     @Operation(summary = "Get user profile by ID")
     public Response getProfile(@PathParam("id") String id) {
         return userRepository.findById(id)
-                .map(User::toProfile)
+                .filter(owner -> userRepository.canViewProfile(currentUser.id(), owner))
+                .map(owner -> visibleProfile(owner, userRepository.isFollowing(currentUser.id(), id)))
                 .map(profile -> Response.ok(profile).build())
                 .orElse(Response.status(Response.Status.NOT_FOUND).build());
+    }
+
+    private User.UserProfile visibleProfile(User u, boolean follows) {
+        boolean owner = u.id().equals(currentUser.id());
+        boolean hideBio = u.bioFollowersOnly() && !follows && !owner;
+        return new User.UserProfile(u.id(), u.username(), hideBio ? "" : u.bio(),
+                u.avatarFollowersOnly() && !follows && !owner ? "" : u.avatarUrl(), u.createdAt(),
+                u.profilePublic(), u.avatarFollowersOnly(), u.circleFollowersOnly(), u.followersFollowersOnly(), u.bioFollowersOnly(),
+                u.messagesFollowersOnly(), u.interactionsFollowersOnly(), hideBio ? "" : u.instagram(),
+                hideBio ? "" : u.reddit(), hideBio ? "" : u.discord());
     }
 
     @PUT
@@ -74,6 +104,8 @@ public class UserResource {
         
         User existing = userRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("User not found: " + id));
+        if (req.bio() != null && req.bio().trim().split("\\s+").length > 160)
+            throw new BadRequestException("La biografía no puede superar 160 palabras");
         User updatedUser = userRepository.update(id,
                 req.bio() != null ? req.bio() : existing.bio(),
                 req.avatarUrl() != null ? req.avatarUrl() : existing.avatarUrl());
@@ -106,8 +138,8 @@ public class UserResource {
     @Path("/{id}/posts")
     @Operation(summary = "List publications by a user")
     public List<Post> getPosts(@PathParam("id") String id) {
-        userRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("User not found: " + id));
+        User owner = userRepository.findById(id).orElseThrow(() -> new NotFoundException("User not found: " + id));
+        if (!userRepository.canViewProfile(currentUser.id(), owner)) throw new NotFoundException("User not found: " + id);
         return postRepository.findByAuthor(id, currentUser.id());
     }
 
@@ -115,7 +147,9 @@ public class UserResource {
     @Path("/{id}/followers")
     @Operation(summary = "List followers of a user")
     public List<User.UserProfile> getFollowers(@PathParam("id") String id) {
-        return userRepository.findFollowers(id).stream().map(User::toProfile).toList();
+        requireCircleVisible(id, true);
+        return userRepository.findFollowers(id).stream().filter(user -> userRepository.canViewProfile(currentUser.id(), user))
+                .map(user -> visibleProfile(user, userRepository.isFollowing(currentUser.id(), user.id()))).toList();
     }
 
     @GET
@@ -130,7 +164,17 @@ public class UserResource {
     @Path("/{id}/following")
     @Operation(summary = "List users followed by a user")
     public List<User.UserProfile> getFollowing(@PathParam("id") String id) {
-        return userRepository.findFollowing(id).stream().map(User::toProfile).toList();
+        requireCircleVisible(id, false);
+        return userRepository.findFollowing(id).stream().filter(user -> userRepository.canViewProfile(currentUser.id(), user))
+                .map(user -> visibleProfile(user, userRepository.isFollowing(currentUser.id(), user.id()))).toList();
+    }
+
+    private void requireCircleVisible(String id, boolean followers) {
+        User owner = userRepository.findById(id).orElseThrow(() -> new NotFoundException("User not found"));
+        boolean restricted = followers ? owner.followersFollowersOnly() : owner.circleFollowersOnly();
+        if (!userRepository.canViewProfile(currentUser.id(), owner) || (restricted
+                && !id.equals(currentUser.id()) && !userRepository.isFollowing(currentUser.id(), id)))
+            throw new NotFoundException("User not found");
     }
 
     @GET
@@ -143,9 +187,15 @@ public class UserResource {
 
     private ConnectionsPage connectionsPage(String id, int page, boolean followers) {
         validateConnectionsPage(page);
-        userRepository.findById(id).orElseThrow(() -> new NotFoundException("User not found: " + id));
+        User owner = userRepository.findById(id).orElseThrow(() -> new NotFoundException("User not found: " + id));
+        boolean restricted = followers ? owner.followersFollowersOnly() : owner.circleFollowersOnly();
+        if (!userRepository.canViewProfile(currentUser.id(), owner))
+            throw new NotFoundException("User not found: " + id);
+        if (restricted && !userRepository.isFollowing(currentUser.id(), id) && !id.equals(currentUser.id()))
+            return new ConnectionsPage(List.of(), 0, page, CONNECTION_PAGE_SIZE);
         var result = userRepository.findConnectionsPage(id, followers, page, CONNECTION_PAGE_SIZE);
-        return new ConnectionsPage(result.users().stream().map(User::toProfile).toList(),
+        return new ConnectionsPage(result.users().stream().filter(user -> userRepository.canViewProfile(currentUser.id(), user))
+                .map(user -> visibleProfile(user, userRepository.isFollowing(currentUser.id(), user.id()))).toList(),
                 result.total(), page, CONNECTION_PAGE_SIZE);
     }
 
@@ -159,7 +209,8 @@ public class UserResource {
     @Path("/discover")
     @Operation(summary = "Discover people not yet followed by the current user")
     public List<User.UserProfile> discover() {
-        return userRepository.findDiscoverable(currentUser.id()).stream().map(User::toProfile).toList();
+        return userRepository.findDiscoverable(currentUser.id()).stream()
+                .map(user -> visibleProfile(user, userRepository.isFollowing(currentUser.id(), user.id()))).toList();
     }
 
     @GET
@@ -201,7 +252,8 @@ public class UserResource {
         if (!id.equals(currentUser.id())) {
             throw new ForbiddenException("Cannot view another user's suggestions");
         }
-        return userRepository.findSuggestions(id).stream().map(User::toProfile).toList();
+        return userRepository.findSuggestions(id).stream()
+                .map(user -> visibleProfile(user, userRepository.isFollowing(currentUser.id(), user.id()))).toList();
     }
 
     @GET
@@ -211,6 +263,7 @@ public class UserResource {
         if (query == null || query.trim().isEmpty()) {
             return List.of();
         }
-        return userRepository.search(query).stream().map(User::toProfile).toList();
+        return userRepository.search(query, currentUser.id()).stream()
+                .map(user -> visibleProfile(user, userRepository.isFollowing(currentUser.id(), user.id()))).toList();
     }
 }

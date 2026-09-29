@@ -3,6 +3,7 @@ package com.redsocial.messaging;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.redsocial.notification.InAppNotificationService;
+import com.redsocial.user.UserRepository;
 import io.quarkus.websockets.next.CloseReason;
 import io.quarkus.websockets.next.OnClose;
 import io.quarkus.websockets.next.OnOpen;
@@ -25,6 +26,7 @@ public class ChatWebSocket {
     @Inject ChatDelivery delivery;
     @Inject MessageRepository messages;
     @Inject InAppNotificationService inAppNotifications;
+    @Inject UserRepository users;
     @Inject ObjectMapper json;
     @ConfigProperty(name = "app.websocket.allowed-origin") String allowedOrigin;
 
@@ -56,6 +58,13 @@ public class ChatWebSocket {
     public void onMessage(String raw) {
         ChatTickets.Peer peer = tickets.peer(connection.id());
         if (peer == null || !peer.authValid()) {
+            connection.closeAndAwait(POLICY_VIOLATION);
+            return;
+        }
+        var recipient = users.findById(peer.otherUserId).orElse(null);
+        if (recipient == null || (recipient.messagesFollowersOnly()
+                && !peer.userId.equals(peer.otherUserId)
+                && !users.isFollowing(peer.userId, peer.otherUserId))) {
             connection.closeAndAwait(POLICY_VIOLATION);
             return;
         }

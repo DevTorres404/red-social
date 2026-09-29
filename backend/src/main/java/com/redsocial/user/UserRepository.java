@@ -129,6 +129,14 @@ public class UserRepository {
                             passwordHash: $passwordHash,
                             bio:          '',
                             avatarUrl:    '',
+                            profilePublic: true,
+                            avatarFollowersOnly: false,
+                            circleFollowersOnly: false,
+                            followersFollowersOnly: false,
+                            bioFollowersOnly: false,
+                            messagesFollowersOnly: false,
+                            interactionsFollowersOnly: false,
+                            instagram: '', reddit: '', discord: '',
                             createdAt:    $createdAt
                         })
                         RETURN u
@@ -168,6 +176,36 @@ public class UserRepository {
                 return mapNode(result.single().get("u").asNode());
             });
         }
+    }
+
+    public User updateSettings(String id, boolean profilePublic, boolean avatarFollowersOnly,
+            boolean circleFollowersOnly, boolean followersFollowersOnly, boolean bioFollowersOnly, boolean messagesFollowersOnly,
+            boolean interactionsFollowersOnly, String instagram, String reddit, String discord) {
+        try (var session = driver.session()) {
+            return session.executeWrite(tx -> {
+                var result = tx.run("""
+                    MATCH (u:Usuario {id:$id})
+                    SET u.profilePublic=$profilePublic, u.avatarFollowersOnly=$avatarFollowersOnly,
+                        u.circleFollowersOnly=$circleFollowersOnly, u.followersFollowersOnly=$followersFollowersOnly,
+                        u.bioFollowersOnly=$bioFollowersOnly,
+                        u.messagesFollowersOnly=$messagesFollowersOnly,
+                        u.interactionsFollowersOnly=$interactionsFollowersOnly,
+                        u.instagram=$instagram, u.reddit=$reddit, u.discord=$discord
+                    RETURN u
+                    """, Map.ofEntries(Map.entry("id", id), Map.entry("profilePublic", profilePublic),
+                    Map.entry("avatarFollowersOnly", avatarFollowersOnly), Map.entry("circleFollowersOnly", circleFollowersOnly),
+                    Map.entry("followersFollowersOnly", followersFollowersOnly),
+                    Map.entry("bioFollowersOnly", bioFollowersOnly), Map.entry("messagesFollowersOnly", messagesFollowersOnly),
+                    Map.entry("interactionsFollowersOnly", interactionsFollowersOnly), Map.entry("instagram", instagram),
+                    Map.entry("reddit", reddit), Map.entry("discord", discord)));
+                if (!result.hasNext()) throw new NotFoundException("User not found: " + id);
+                return mapNode(result.single().get("u").asNode());
+            });
+        }
+    }
+
+    public boolean canViewProfile(String viewerId, User owner) {
+        return viewerId.equals(owner.id()) || owner.profilePublic() || isFollowing(viewerId, owner.id());
     }
 
     // ── Social graph ─────────────────────────────────────────────────────────
@@ -281,18 +319,19 @@ public class UserRepository {
             return session.executeRead(tx -> tx.run("""
                     MATCH (me:Usuario {id: $userId}), (candidate:Usuario)
                     WHERE candidate <> me AND NOT (me)-[:SIGUE]->(candidate)
+                      AND coalesce(candidate.profilePublic, true)
                     RETURN candidate ORDER BY toLower(candidate.username), candidate.id LIMIT 20
                     """, Map.of("userId", userId))
                     .list(r -> mapNode(r.get("candidate").asNode())));
         }
     }
 
-    public List<User> search(String query) {
+    public List<User> search(String query, String viewerId) {
         try (var session = driver.session()) {
             return session.executeRead(tx -> {
                 var result = tx.run(
-                        "MATCH (u:Usuario) WHERE toLower(u.username) CONTAINS toLower($query) OR toLower(u.bio) CONTAINS toLower($query) RETURN u LIMIT 50",
-                        Map.of("query", query)
+                        "MATCH (viewer:Usuario {id:$viewerId}), (u:Usuario) WHERE (u.id=viewer.id OR coalesce(u.profilePublic,true) OR (viewer)-[:SIGUE]->(u)) AND (toLower(u.username) CONTAINS toLower($query) OR toLower(u.bio) CONTAINS toLower($query)) RETURN u LIMIT 50",
+                        Map.of("query", query, "viewerId", viewerId)
                 );
                 return result.list(r -> mapNode(r.get("u").asNode()));
             });
@@ -306,7 +345,7 @@ public class UserRepository {
                 var result = tx.run(
                         """
                         MATCH (me:Usuario {id: $userId})-[:SIGUE]->(friend:Usuario)-[:SIGUE]->(rec:Usuario)
-                        WHERE NOT (me)-[:SIGUE]->(rec) AND rec.id <> $userId
+                        WHERE NOT (me)-[:SIGUE]->(rec) AND rec.id <> $userId AND coalesce(rec.profilePublic,true)
                         RETURN rec, count(*) AS mutualFriends
                         ORDER BY mutualFriends DESC, rec.username ASC
                         LIMIT 10
@@ -333,7 +372,13 @@ public class UserRepository {
                 node.get("passwordHash").asString(""),
                 node.get("bio").asString(""),
                 node.get("avatarUrl").asString(""),
-                Instant.parse(node.get("createdAt").asString())
+                Instant.parse(node.get("createdAt").asString()),
+                node.get("profilePublic").asBoolean(true), node.get("avatarFollowersOnly").asBoolean(false),
+                node.get("circleFollowersOnly").asBoolean(false), node.get("followersFollowersOnly").asBoolean(false),
+                node.get("bioFollowersOnly").asBoolean(false),
+                node.get("messagesFollowersOnly").asBoolean(false),
+                node.get("interactionsFollowersOnly").asBoolean(false),
+                node.get("instagram").asString(""), node.get("reddit").asString(""), node.get("discord").asString("")
         );
     }
 }

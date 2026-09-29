@@ -137,6 +137,8 @@ export const authApi = {
 
 /* ── Users & Graph endpoints ─────────────────────────────────────────────── */
 export const usersApi = {
+  getSettings: () => api.get('/users/me/settings'),
+  updateSettings: (data) => api.put('/users/me/settings', data),
   getProfile:     (id) => api.get(`/users/${id}`),
   updateProfile:  (id, data) => api.put(`/users/${id}`, data),
   uploadAvatar:   (id, file) => {

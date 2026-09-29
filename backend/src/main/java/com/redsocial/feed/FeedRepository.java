@@ -49,7 +49,9 @@ public class FeedRepository {
                         RETURN p,
                                author.id       AS authorId,
                                author.username AS authorUsername,
-                               author.avatarUrl AS authorAvatarUrl,
+                               CASE WHEN NOT coalesce(author.avatarFollowersOnly, false) OR author.id = $userId
+                                    OR EXISTS { MATCH (:Usuario {id: $userId})-[:SIGUE]->(author) }
+                                    THEN author.avatarUrl ELSE '' END AS authorAvatarUrl,
                                likeCount,
                                commentCount,
                                like IS NOT NULL  AS likedByMe
@@ -88,6 +90,7 @@ public class FeedRepository {
                         MATCH (author:Usuario)-[:PUBLICO]->(p:Post)
                         WHERE author.id <> $userId
                           AND NOT ((:Usuario {id: $userId})-[:SIGUE]->(author))
+                          AND coalesce(author.profilePublic, true)
                         // Hay que contar la VARIABLE, no count(*): un OPTIONAL MATCH
                         // sin coincidencia emite una fila con la variable en NULL, y
                         // count(*) la cuenta igual. Un post sin likes reportaría 1.
@@ -99,7 +102,9 @@ public class FeedRepository {
                         RETURN p,
                                author.id       AS authorId,
                                author.username AS authorUsername,
-                               author.avatarUrl AS authorAvatarUrl,
+                               CASE WHEN NOT coalesce(author.avatarFollowersOnly, false) OR author.id = $userId
+                                    OR EXISTS { MATCH (:Usuario {id: $userId})-[:SIGUE]->(author) }
+                                    THEN author.avatarUrl ELSE '' END AS authorAvatarUrl,
                                likeCount,
                                commentCount,
                                like IS NOT NULL AS likedByMe

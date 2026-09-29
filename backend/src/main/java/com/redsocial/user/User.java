@@ -19,13 +19,25 @@ public record User(
         String passwordHash,
         String bio,
         String avatarUrl,
-        Instant createdAt
+        Instant createdAt,
+        boolean profilePublic,
+        boolean avatarFollowersOnly,
+        boolean circleFollowersOnly,
+        boolean followersFollowersOnly,
+        boolean bioFollowersOnly,
+        boolean messagesFollowersOnly,
+        boolean interactionsFollowersOnly,
+        String instagram,
+        String reddit,
+        String discord
 ) {
     /**
      * Projection used in API responses — no sensitive fields.
      */
     public UserProfile toProfile() {
-        return new UserProfile(id, username, bio, avatarUrl, createdAt);
+        return new UserProfile(id, username, bio, avatarUrl, createdAt, profilePublic,
+                avatarFollowersOnly, circleFollowersOnly, followersFollowersOnly, bioFollowersOnly,
+                messagesFollowersOnly, interactionsFollowersOnly, instagram, reddit, discord);
     }
 
     public record UserProfile(
@@ -33,6 +45,16 @@ public record User(
             String username,
             String bio,
             String avatarUrl,
-            Instant createdAt
+            Instant createdAt,
+            boolean profilePublic,
+            boolean avatarFollowersOnly,
+            boolean circleFollowersOnly,
+            boolean followersFollowersOnly,
+            boolean bioFollowersOnly,
+            boolean messagesFollowersOnly,
+            boolean interactionsFollowersOnly,
+            String instagram,
+            String reddit,
+            String discord
     ) {}
 }

@@ -105,7 +105,9 @@ public class PostRepository {
                         RETURN p,
                                author.id       AS authorId,
                                author.username AS authorUsername,
-                               author.avatarUrl AS authorAvatarUrl,
+                               CASE WHEN NOT coalesce(author.avatarFollowersOnly, false) OR author.id = $currentUserId
+                                    OR EXISTS { MATCH (:Usuario {id: $currentUserId})-[:SIGUE]->(author) }
+                                    THEN author.avatarUrl ELSE '' END AS authorAvatarUrl,
                                likeCount,
                                commentCount,
                                like IS NOT NULL AS likedByMe
@@ -144,7 +146,9 @@ public class PostRepository {
                         RETURN p,
                                author.id       AS authorId,
                                author.username AS authorUsername,
-                               author.avatarUrl AS authorAvatarUrl,
+                               CASE WHEN NOT coalesce(author.avatarFollowersOnly, false) OR author.id = $currentUserId
+                                    OR EXISTS { MATCH (:Usuario {id: $currentUserId})-[:SIGUE]->(author) }
+                                    THEN author.avatarUrl ELSE '' END AS authorAvatarUrl,
                                likeCount,
                                commentCount,
                                like IS NOT NULL AS likedByMe
@@ -180,12 +184,14 @@ public class PostRepository {
                         RETURN c,
                                author.id       AS authorId,
                                author.username AS authorUsername,
-                               author.avatarUrl AS authorAvatarUrl,
+                               CASE WHEN NOT coalesce(author.avatarFollowersOnly, false) OR author.id = $viewerId
+                                    OR EXISTS { MATCH (:Usuario {id: $viewerId})-[:SIGUE]->(author) }
+                                    THEN author.avatarUrl ELSE '' END AS authorAvatarUrl,
                                emojis, myReaction
                         ORDER BY c.createdAt ASC, c.id ASC
                         LIMIT 200
                         """,
-                        Map.of("postId", postId, "viewerReactionPrefix", viewerId + "|")
+                        Map.of("postId", postId, "viewerReactionPrefix", viewerId + "|", "viewerId", viewerId)
                 );
                 return result.list(row -> mapComment(
                         row.get("c").asNode(),
@@ -210,9 +216,11 @@ public class PostRepository {
                              head(collect(CASE WHEN reaction.id = $viewerReactionPrefix + c.id
                                  THEN reaction.emoji END)) AS myReaction
                         RETURN c, author.id AS authorId, author.username AS authorUsername,
-                               author.avatarUrl AS authorAvatarUrl, emojis, myReaction
+                               CASE WHEN NOT coalesce(author.avatarFollowersOnly, false) OR author.id = $viewerId
+                                    OR EXISTS { MATCH (:Usuario {id: $viewerId})-[:SIGUE]->(author) }
+                                    THEN author.avatarUrl ELSE '' END AS authorAvatarUrl, emojis, myReaction
                         """, Map.of("postId", postId, "commentId", commentId,
-                                "viewerReactionPrefix", viewerId + "|"));
+                                "viewerReactionPrefix", viewerId + "|", "viewerId", viewerId));
                 if (!result.hasNext()) throw new NotFoundException("Comment not found: " + commentId);
                 var row = result.single();
                 return mapComment(row.get("c").asNode(), row.get("authorId").asString(),

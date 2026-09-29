@@ -12,6 +12,7 @@ import ProfilePage  from './pages/profile/ProfilePage';
 import ChatPage from './pages/messages/ChatPage';
 import GraphPage from './pages/graph/GraphPage';
 import NotificationSettingsPage from './pages/settings/NotificationSettingsPage';
+import PrivacySettingsPage from './pages/settings/PrivacySettingsPage';
 
 function PrivateRoute({ children }) {
   const { isAuthenticated, restoring } = useAuth();
@@ -49,6 +50,7 @@ function AppRoutes() {
           <Route path="/messages/:userId" element={<ChatPage />} />
           <Route path="/graph" element={<GraphPage />} />
           <Route path="/settings/notifications" element={<NotificationSettingsPage />} />
+          <Route path="/settings" element={<PrivacySettingsPage />} />
         </Route>
 
         {/* Catch-all */}

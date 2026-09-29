@@ -35,7 +35,8 @@ public class GraphRepository {
         try (var session = driver.session()) {
             return session.executeRead(tx -> tx.run("""
                     MATCH path=(me:Usuario {id: $userId})-[:SIGUE*1..2]->(target:Usuario)
-                    WHERE target <> me AND all(n IN nodes(path) WHERE single(x IN nodes(path) WHERE x = n))
+                    WHERE target <> me AND (coalesce(target.profilePublic,true) OR (me)-[:SIGUE]->(target))
+                      AND all(n IN nodes(path) WHERE single(x IN nodes(path) WHERE x = n))
                     WITH target, path ORDER BY length(path), [n IN nodes(path) | n.id]
                     WITH target, head(collect(path)) AS path
                     RETURN target.id AS id, target.username AS username,
@@ -53,6 +54,7 @@ public class GraphRepository {
             return session.executeRead(tx -> tx.run("""
                     MATCH (me:Usuario {id: $userId})-[:SIGUE]->(via:Usuario)-[:SIGUE]->(candidate:Usuario)
                     WHERE candidate <> me AND NOT (me)-[:SIGUE]->(candidate)
+                      AND coalesce(candidate.profilePublic,true)
                     WITH candidate, via ORDER BY via.username
                     WITH candidate, collect(DISTINCT via.username) AS mutuals,
                          count(DISTINCT via) AS mutualCount

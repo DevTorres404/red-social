@@ -4,6 +4,8 @@ Aplicación de curso con React, Quarkus, Neo4j y RustFS. El modelo social usa **
 
 ## Arquitectura
 
+Para el mapa de módulos, patrones, flujos de datos y configuración consulta [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ```text
 Navegador React ── REST / WebSocket ── Quarkus ── Cypher ── Neo4j
                                           └──── S3 ───── RustFS privado

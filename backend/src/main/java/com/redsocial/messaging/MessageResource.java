@@ -61,6 +61,7 @@ public class MessageResource {
     @Operation(summary = "Send a direct message to another user")
     public Response send(@Valid SendMessageRequest request) {
         String senderId = currentUser.id();
+        requireMessagingPermission(senderId, request.recipientId());
         Message message = messageRepository.send(senderId, request.recipientId(), request.text());
         delivery.publish(message, null);
         inAppNotifications.onMessageSent(senderId, request.recipientId(), message.id());
@@ -100,7 +101,15 @@ public class MessageResource {
         String myId = currentUser.id();
         if (request == null) throw new BadRequestException("Other user is required");
         requireOtherUser(myId, request.otherUserId());
+        requireMessagingPermission(myId, request.otherUserId());
         return tickets.issue(myId, request.otherUserId(), Instant.ofEpochSecond(jwt.getExpirationTime()));
+    }
+
+    private void requireMessagingPermission(String senderId, String recipientId) {
+        var recipient = users.findById(recipientId).orElseThrow(() -> new NotFoundException("User not found"));
+        if (recipient.messagesFollowersOnly() && !senderId.equals(recipientId)
+                && !users.isFollowing(senderId, recipientId))
+            throw new ForbiddenException("Solo los seguidores pueden enviar mensajes");
     }
 
     private void requireOtherUser(String myId, String otherUserId) {

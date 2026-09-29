@@ -3,7 +3,7 @@ import { Link, useNavigate, NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { usersApi, notificationsApi } from '../../lib/api';
 import { collectNewUnread, describeNotification } from '../../lib/notifications';
-import { Home, MessageSquare, Compass, LogOut, Bell, Heart, UserPlus, AtSign, MessageCircle, Search } from 'lucide-react';
+import { Home, MessageSquare, Compass, LogOut, Bell, Heart, UserPlus, AtSign, MessageCircle, Search, Settings } from 'lucide-react';
 import './Navbar.css';
 
 export default function Navbar() {
@@ -263,11 +263,12 @@ export default function Navbar() {
         
         {/* Notifications Tray */}
         <div className="nav-notifications-wrapper" ref={notifRef}>
-          <button type="button" className="nav-icon-btn" onClick={toggleNotifications} aria-label={`Notificaciones${unreadCount ? `, ${unreadCount} sin leer` : ''}`} aria-expanded={showNotifications} aria-controls="navbar-notifications">
+          <button type="button" className={`nav-profile-link nav-notifications-button${showNotifications ? ' active' : ''}`} onClick={toggleNotifications} aria-label={`Notificaciones${unreadCount ? `, ${unreadCount} sin leer` : ''}`} aria-expanded={showNotifications} aria-controls="navbar-notifications" title="Notificaciones">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
               <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
             </svg>
+            <span>Notificaciones</span>
             {unreadCount > 0 && <span className="nav-badge" aria-hidden="true">{unreadCount > 99 ? '99+' : unreadCount}</span>}
           </button>
           
@@ -275,9 +276,6 @@ export default function Navbar() {
             <div className="notifications-dropdown" id="navbar-notifications">
               <div className="notifications-header">
                 <h3>Notificaciones</h3>
-                <Link to="/settings/notifications" className="settings-link" aria-label="Configurar notificaciones" title="Configurar notificaciones" onClick={() => setShowNotifications(false)}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-                </Link>
               </div>
               {notificationError && <p className="notifications-error" role="alert">{notificationError}</p>}
               <div className="notifications-list">
@@ -322,6 +320,11 @@ export default function Navbar() {
             </div>
           )}
         </div>
+
+        <NavLink to="/settings" aria-label="Ajustes" title="Ajustes" className={({ isActive }) => `nav-profile-link ${isActive ? 'active' : ''}`}>
+          <Settings size={18} />
+          <span>Ajustes</span>
+        </NavLink>
 
         <NavLink to={`/users/${user?.id}`} aria-label="Mi perfil" title="Mi perfil" className={({ isActive }) => `nav-profile-link ${isActive ? 'active' : ''}`}>
           <div className="nav-avatar">

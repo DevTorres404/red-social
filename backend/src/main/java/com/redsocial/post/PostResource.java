@@ -7,6 +7,7 @@ import com.redsocial.notification.PushNotificationService;
 import com.redsocial.post.dto.CreateCommentRequest;
 import com.redsocial.post.dto.CreatePostRequest;
 import com.redsocial.post.dto.CommentReactionRequest;
+import com.redsocial.user.UserRepository;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
@@ -41,6 +42,24 @@ public class PostResource {
 
     @Inject
     CurrentUser currentUser;
+    @Inject UserRepository users;
+
+    private void requirePostVisible(String postId) {
+        var post = postRepository.findById(postId, currentUser.id())
+                .orElseThrow(() -> new NotFoundException("Post not found"));
+        var author = users.findById(post.authorId()).orElseThrow(() -> new NotFoundException("Post not found"));
+        if (!users.canViewProfile(currentUser.id(), author))
+            throw new NotFoundException("Post not found");
+    }
+
+    private void requireInteractionPermission(String postId) {
+        requirePostVisible(postId);
+        var post = postRepository.findById(postId, currentUser.id()).orElseThrow();
+        var author = users.findById(post.authorId()).orElseThrow();
+        if (author.interactionsFollowersOnly() && !author.id().equals(currentUser.id())
+                && !users.isFollowing(currentUser.id(), author.id()))
+            throw new ForbiddenException("Solo los seguidores pueden interactuar con esta publicación");
+    }
 
     @Inject
     MediaStorage mediaStorage;
@@ -101,7 +120,9 @@ public class PostResource {
     @Operation(summary = "Get a post by ID with like and comment counts")
     public Response findById(@PathParam("postId") String postId) {
         String userId = currentUser.id();
-        return postRepository.findById(postId, userId)
+        var post = postRepository.findById(postId, userId);
+        if (post.isPresent()) requirePostVisible(postId);
+        return post
                 .map(post -> Response.ok(post).build())
                 .orElse(Response.status(Response.Status.NOT_FOUND).build());
     }
@@ -110,6 +131,7 @@ public class PostResource {
     @Path("/{postId}/media-url")
     @Operation(summary = "Issue a one-minute read URL after authorizing post access")
     public Map<String, String> mediaUrl(@PathParam("postId") String postId) {
+        requirePostVisible(postId);
         Post post = postRepository.findById(postId, currentUser.id())
                 .orElseThrow(() -> new NotFoundException("Post not found: " + postId));
         if (post.mediaKey().isBlank()) throw new NotFoundException("Post has no image");
@@ -131,6 +153,7 @@ public class PostResource {
     @Path("/{postId}/like")
     @Operation(summary = "Like a post")
     public Response like(@PathParam("postId") String postId) {
+        requireInteractionPermission(postId);
         String userId = currentUser.id();
         boolean changed = postRepository.like(userId, postId);
         postRepository.findById(postId, userId).ifPresent(p -> {
@@ -150,6 +173,7 @@ public class PostResource {
     @Path("/{postId}/like")
     @Operation(summary = "Unlike a post")
     public Response unlike(@PathParam("postId") String postId) {
+        requireInteractionPermission(postId);
         String userId = currentUser.id();
         boolean changed = postRepository.unlike(userId, postId);
         if (changed) {
@@ -165,6 +189,7 @@ public class PostResource {
     @Path("/{postId}/comments")
     @Operation(summary = "Get all comments for a post")
     public List<Post.Comment> getComments(@PathParam("postId") String postId) {
+        requirePostVisible(postId);
         postRepository.findById(postId, currentUser.id())
                 .orElseThrow(() -> new NotFoundException("Post not found: " + postId));
         return postRepository.findComments(postId, currentUser.id());
@@ -175,6 +200,7 @@ public class PostResource {
     @Operation(summary = "Add a comment to a post")
     public Response addComment(@PathParam("postId") String postId,
                                @Valid CreateCommentRequest request) {
+        requireInteractionPermission(postId);
         String userId = currentUser.id();
         Post.Comment comment = postRepository.addComment(postId, userId, request.text().trim(), null);
         publishComment(postId, userId, comment);
@@ -188,6 +214,7 @@ public class PostResource {
     public Response addCommentWithImage(@PathParam("postId") String postId,
                                         @RestForm String text,
                                         @RestForm(FileUpload.ALL) List<FileUpload> files) {
+        requireInteractionPermission(postId);
         String content = text == null ? "" : text.trim();
         if (content.length() > 500) throw new BadRequestException("Comment cannot exceed 500 characters");
         if (files == null || files.size() != 1 || !"image".equals(files.get(0).name())) {
@@ -213,6 +240,7 @@ public class PostResource {
     @Operation(summary = "Issue a short-lived read URL for a comment image")
     public Map<String, String> commentMediaUrl(@PathParam("postId") String postId,
                                                @PathParam("commentId") String commentId) {
+        requirePostVisible(postId);
         Post.Comment comment = postRepository.findComment(postId, commentId, currentUser.id());
         if (comment.mediaKey().isBlank()) throw new NotFoundException("Comment has no image");
         return Map.of("url", mediaStorage.publicUrl(comment.mediaKey()));
@@ -224,6 +252,7 @@ public class PostResource {
     public Post.Comment reactToComment(@PathParam("postId") String postId,
                                        @PathParam("commentId") String commentId,
                                        CommentReactionRequest request) {
+        requireInteractionPermission(postId);
         if (request == null || !COMMENT_EMOJIS.contains(request.emoji())) {
             throw new BadRequestException("Unsupported comment reaction");
         }
@@ -239,6 +268,7 @@ public class PostResource {
     @Operation(summary = "Remove my emoji reaction from a comment")
     public Post.Comment removeCommentReaction(@PathParam("postId") String postId,
                                               @PathParam("commentId") String commentId) {
+        requireInteractionPermission(postId);
         String userId = currentUser.id();
         postRepository.removeCommentReaction(postId, commentId, userId);
         Post.Comment comment = postRepository.findComment(postId, commentId, userId);

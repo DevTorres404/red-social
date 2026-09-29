@@ -238,3 +238,4 @@
 @media (prefers-reduced-motion: reduce) {
   .profile-page .profile-hero-photo-edit, .profile-page .network-btn { transition: none; }
 }
+.profile-social-links{display:flex;flex-wrap:wrap;gap:9px;margin-top:12px}.profile-social-link{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border:1px solid rgba(126,98,177,.18);border-radius:999px;color:#655487;background:rgba(255,255,255,.56);font-size:12px;font-weight:600}.profile-social-link svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.profile-social-link svg .social-icon-dot{fill:currentColor;stroke:none}
