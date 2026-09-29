@@ -113,7 +113,7 @@ public class PostResource {
         Post post = postRepository.findById(postId, currentUser.id())
                 .orElseThrow(() -> new NotFoundException("Post not found: " + postId));
         if (post.mediaKey().isBlank()) throw new NotFoundException("Post has no image");
-        return Map.of("url", mediaStorage.presignedReadUrl(post.mediaKey()));
+        return Map.of("url", mediaStorage.publicUrl(post.mediaKey()));
     }
 
     @DELETE
@@ -215,7 +215,7 @@ public class PostResource {
                                                @PathParam("commentId") String commentId) {
         Post.Comment comment = postRepository.findComment(postId, commentId, currentUser.id());
         if (comment.mediaKey().isBlank()) throw new NotFoundException("Comment has no image");
-        return Map.of("url", mediaStorage.presignedReadUrl(comment.mediaKey()));
+        return Map.of("url", mediaStorage.publicUrl(comment.mediaKey()));
     }
 
     @PUT
