@@ -1,168 +1,125 @@
 # Red Social Distribuida
 
-Aplicación web distribuida que implementa las funcionalidades esenciales de una red social, diseñada para demostrar conceptos de **Sistemas Distribuidos**.
-
-## Integrantes
-
-<!-- TODO: completar con los integrantes del grupo -->
-- Integrante 1
-- Integrante 2
-- Integrante 3
+Aplicación de curso con React, Quarkus, Neo4j y MinIO. El modelo social usa **seguimiento dirigido**: seguir a alguien no crea una amistad ni un seguimiento recíproco.
 
 ## Arquitectura
 
-```
-┌─────────────┐      REST / WebSocket      ┌─────────────────┐
-│    React     │ ◄────────────────────────► │  Quarkus Backend│
-│  (Vite SPA) │                             │   (Java 21)     │
-└─────────────┘                             └────────┬────────┘
-                                                     │
-                              ┌──────────────────────┼──────────────────────┐
-                              │                      │                      │
-                       Cypher (Bolt)           S3 API                  Web Push
-                              │                      │                      │
-                    ┌─────────▼──────┐    ┌──────────▼──────┐    ┌─────────▼──────┐
-                    │     Neo4j 5    │    │   MinIO (S3)    │    │   Browser Push  │
-                    │  (Graph DB)    │    │ (Object Storage)│    │     Service     │
-                    └────────────────┘    └─────────────────┘    └────────────────┘
+```text
+Navegador React ── REST / WebSocket ── Quarkus ── Cypher ── Neo4j
+                                          └──── S3 ───── MinIO privado
+                                          └──── Web Push ───── servicio del navegador
 ```
 
-## Stack tecnológico
+- Neo4j conserva usuarios, relaciones, publicaciones, mensajes y referencias a imágenes; nunca almacena archivos binarios.
+- MinIO conserva los bytes de las imágenes. El backend autoriza la lectura antes de emitir una URL firmada de 60 segundos.
+- El historial de chat se consulta por REST. WebSocket entrega mensajes nuevos sin polling.
+- Las publicaciones crean trabajos Web Push durables en Neo4j; un proceso separado los entrega sin bloquear la publicación.
+- La vista «Red» muestra recorridos y publicaciones calculados por cinco consultas Cypher reales, no un dibujo precargado.
+- Esta instalación ejecuta **una instancia de backend**. Los tickets y conexiones WebSocket están en memoria; no hay coordinación entre réplicas.
 
-| Componente | Tecnología | Puerto |
-|---|---|---|
-| Frontend | React 18 + Vite | 3000 |
-| Backend | Quarkus 3.15 + Java 21 | 8080 |
-| Base de datos de grafos | Neo4j 5 | 7474 / 7687 |
-| Almacenamiento de archivos | MinIO (S3-compatible) | 9000 / 9001 |
-| Comunicación en tiempo real | WebSocket (Quarkus Next) | — |
-| Notificaciones | Web Push (VAPID) | — |
-| Contenedores | Docker / Docker Compose | — |
+## Arranque local
 
-## Inicio rápido
-
-### Requisitos
-- Docker 24+
-- Docker Compose v2
-- Java 21+ (para desarrollo local del backend)
-- Node 22+ (para desarrollo local del frontend)
-
-### Con Docker Compose (recomendado)
+Requisitos: Docker Compose v2, Git Bash/WSL y OpenSSL para generar las claves JWT. Para desarrollo fuera de Docker también se necesitan Java 21 y Node.
 
 ```bash
-# 1. Copiar variables de entorno
 cp .env.example .env
-# 2. Editar .env con los valores reales (especialmente JWT y VAPID)
-# 3. Levantar todo
+sh scripts/generate-jwt-keys.sh
+node scripts/generate-vapid-keys.mjs
 docker compose up --build
 ```
 
-Servicios disponibles:
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8080
-- Swagger UI: http://localhost:8080/q/swagger-ui
-- Neo4j Browser: http://localhost:7474
-- MinIO Console: http://localhost:9001
+No usar `APP_SEED_FORCE=true` sobre datos que se quieran conservar. Los volúmenes de Neo4j y MinIO persisten entre reinicios; `docker compose down -v` los elimina.
 
-### Desarrollo local
+| Servicio | Dirección local |
+|---|---|
+| Aplicación | http://localhost:3000 |
+| API / Swagger | http://localhost:8080 / http://localhost:8080/q/swagger-ui |
+| Neo4j Browser | http://localhost:7474 |
+| Consola MinIO | http://localhost:9001 |
 
-**Backend:**
-```bash
-cd backend
-mvn quarkus:dev
-```
+En `.env` deben configurarse secretos reales, no los valores de ejemplo. `MINIO_PUBLIC_ENDPOINT` debe ser accesible desde los navegadores que abrirán imágenes; `WEBSOCKET_ALLOWED_ORIGIN` debe coincidir exactamente con el origen del frontend. En un despliegue HTTPS, ambos deben usar direcciones seguras y coherentes con el proxy. Las claves privadas JWT se generan en `secrets/` (ignorado por Git) y se montan de solo lectura.
 
-**Frontend:**
-```bash
-cd frontend
-npm install
-npm run dev
-```
+## Despliegue HTTPS (producción)
 
-## Variables de entorno necesarias
+Usa el Compose **autónomo** `docker-compose.prod.yml`, no lo combines con el de desarrollo. Caddy publica únicamente 80/443 y obtiene certificados TLS para dos dominios: la aplicación y las imágenes. Neo4j, MinIO, backend y frontend quedan internos. La base nueva arranca sin cuentas de demostración.
 
-Ver [.env.example](.env.example) para la lista completa.
+Los requisitos, la plantilla `.env.prod.example`, el primer arranque, las verificaciones, actualizaciones y respaldos están en [comando.md](comando.md). Web Push y la cookie segura requieren HTTPS válido fuera de localhost.
 
-Las variables críticas que **deben** generarse manualmente:
-- `JWT_SECRET`: mínimo 256 bits
-- `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`: generar con `npx web-push generate-vapid-keys`
+## Modelo de datos esencial
 
-## Modelo del grafo (Neo4j)
+El inicio de sesión acepta **email o nombre de usuario** en el mismo campo. `POST /api/auth/login` recibe `{ "identifier": "usuario_o_email", "password": "..." }`; por compatibilidad también acepta el campo anterior `email`. Las credenciales incorrectas reciben la misma respuesta sin indicar si existe la cuenta.
 
 ```cypher
-// Nodos
-(:Usuario {id, username, email, bio, avatarUrl, createdAt})
-(:Post    {id, content, mediaUrl, createdAt})
-
-// Relaciones
-(:Usuario)-[:SIGUE]    ->(:Usuario)
-(:Usuario)-[:PUBLICA]  ->(:Post)
-(:Usuario)-[:REACCIONA {tipo, fecha}]->(:Post)
-(:Usuario)-[:COMENTA]  ->(:Post)
+(:Usuario)-[:SIGUE]->(:Usuario)
+(:Usuario)-[:PUBLICO]->(:Post {id, content, mediaKey, mediaType, mediaSize, createdAt})
+(:Usuario)-[:LE_GUSTA]->(:Post)
+(:Usuario)-[:ENVIO]->(:Mensaje)-[:EN_CONVERSACION]->(:Conversacion)
+(:Usuario)-[:PARTICIPA]->(:Conversacion)
 ```
 
-## Endpoints principales
+`mediaKey` es una clave generada por el servidor, no una URL suministrada por el cliente. Las imágenes se guardan en el bucket privado `red-social` (o `MINIO_BUCKET`).
 
+## Publicaciones con imagen
+
+Hay **un solo flujo de escritura de imágenes**: `POST /api/posts/with-image` recibe multipart con `content` y exactamente una parte `image`. Se aceptan PNG/JPEG reales de hasta 5 MiB y 16 megapíxeles, con extensión y tipo declarados concordantes. El nombre original no se utiliza como clave S3. `POST /api/posts` solo crea publicaciones de texto y rechaza `mediaUrl` arbitrarios.
+
+`GET /api/posts/{id}/media-url` exige JWT y devuelve una URL de lectura firmada de 60 segundos. El bucket rechaza lecturas anónimas. Si falla la creación del post tras subir la imagen, se intenta borrarla; una eliminación fallida se registra para reintento. Al borrar un post, la clave se encola en Neo4j dentro de la misma transacción y luego se borra el objeto. Las limpiezas pendientes se reintentan al iniciar el backend.
+
+La interfaz permite seleccionar, previsualizar y quitar una imagen, muestra progreso y permite reintentar tras un error. El feed vuelve a solicitar una URL de lectura al cargarse.
+
+## Conversaciones en tiempo real
+
+`GET /api/messages/conversations` lista interlocutores; `GET /api/messages/{userId}?skip=0&limit=50` devuelve historial paginado. La conversación se crea en Neo4j al enviar el primer mensaje. `POST /api/messages/ws-ticket` con `{ "otherUserId": "..." }` exige JWT y devuelve un ticket de un solo uso, válido 30 segundos y vinculado a esa pareja y al vencimiento del JWT. El navegador lo ofrece en `Sec-WebSocket-Protocol` al conectar a `/ws/chat/{conversationId}`; **no se incluye el JWT en la URL**. El origen permitido se configura con `WEBSOCKET_ALLOWED_ORIGIN`.
+
+Cada mensaje WebSocket envía `{ "clientMessageId": "UUID", "text": "..." }`. El servidor valida el tamaño (máximo 1000 caracteres y marco de 2048 bytes), limita la frecuencia (10 mensajes por 10 segundos), persiste antes de difundir y deduplica reintentos por ID de cliente. Al reconectar, la interfaz recupera historial REST y fusiona por ID sin duplicados. Un ticket de otra conversación no concede acceso. La etiqueta «Guardado en servidor» no significa entregado al otro navegador; «Leído» refleja el estado persistido cuando se vuelve a consultar.
+
+## Notificaciones dentro de Orbit
+
+La **campana de la barra superior** es la bandeja interna y no requiere permiso del navegador. Las publicaciones nuevas de personas seguidas, likes y comentarios en tus posts, nuevos seguidores y mensajes directos generan una notificación persistente en Neo4j. Mientras Orbit está abierto, consulta el contador cada cinco segundos y muestra un **toast dentro de Orbit** al detectar un aviso nuevo; al recuperar el foco también consulta de inmediato. Al abrir la campana se carga la lista, se marcan como leídas y cada aviso enlaza al post, perfil o conversación. Este canal no es instantáneo como el WebSocket del chat. Las acciones repetidas de seguir o dar like no duplican el aviso. Si se borra un post, se eliminan sus avisos relacionados.
+
+Los avisos de escritorio **Web Push son adicionales**: se activan por dispositivo en Configuración → Notificaciones y pueden aparecer incluso con la pestaña cerrada. Desactivar o denegar Push no desactiva la bandeja de Orbit. La persistencia del aviso interno ocurre después de guardar la acción; si ese paso falla, la acción no se revierte y el fallo queda registrado para diagnóstico.
+
+## Web Push
+
+Las claves VAPID se generan una vez en `.env` ignorado por Git; el generador rechaza reemplazar claves existentes para no invalidar suscripciones. Nunca publiques `VAPID_PRIVATE_KEY`. La pantalla **Notificaciones** solicita permiso solo al pulsar «Activar en este navegador». Cada navegador guarda su propia suscripción. Al desactivar o salir se intenta eliminar la suscripción del servidor y del navegador; un endpoint revocado se elimina al recibir 404/410 del servicio push. El backend solo acepta endpoints HTTPS de servicios push conocidos, para evitar que una suscripción falsa se convierta en una solicitud a una dirección interna.
+
+El Service Worker (`/sw.js`) recibe un payload mínimo con ID de post. Al hacer clic abre `/posts/{id}`; si el post ya no existe, la pantalla ofrece volver al inicio. La cola `PushDelivery` se crea en la misma transacción que el post para los seguidores suscritos. El worker revisa de nuevo la relación `SIGUE`, la propiedad de la suscripción y la existencia del post antes de enviar; reintenta hasta cinco veces, con espera creciente y llamada limitada a diez segundos. Un error push **no cancela** una publicación ya persistida. El envío entre Neo4j y un servicio externo es de tipo *al menos una vez*: si el proceso cae después de enviar y antes de cerrar el trabajo, puede reintentar. La etiqueta del aviso usa el ID de post para evitar duplicados visibles en el mismo navegador; no se promete entrega exactamente una vez.
+
+Web Push requiere **HTTPS** al desplegarlo fuera de la máquina local; `http://localhost:3000` funciona para desarrollo por ser un contexto seguro reconocido por el navegador. No funciona en cualquier `http://IP`. Si VAPID no está configurado, la publicación sigue disponible pero `/api/push/public-key` devuelve 503. Una pestaña cerrada no impide que el Service Worker muestre el aviso, siempre que el navegador/sistema mantenga habilitadas las notificaciones.
+
+## Consultas y visualización del grafo
+
+`/graph` consume las cinco rutas autenticadas `/api/graph/common/{otherId}`, `/reachable`, `/recommendations`, `/network-posts` y `/trending-posts`. La cuenta actual siempre procede del JWT; el cliente no puede consultar la red privada de otra identidad cambiando un parámetro. Las consultas usan `$userId`/`$otherId`, límites 50–100, orden estable y devuelven listas vacías cuando no hay resultados. [Detalle de Cypher, semántica y fixture esperado](docs/CYPHER_QUERIES.md).
+
+## Verificación
+
+```powershell
+cd backend; mvn -B clean test; mvn -B -DskipTests package
+cd ../frontend; npm run lint; npm run build
+cd ..; ./scripts/phase-a-c-smoke.ps1
+./scripts/phase-d-smoke.ps1
+./scripts/phase-e-smoke.ps1
+./scripts/phase-f-g-smoke.ps1
 ```
-POST   /api/auth/register
-POST   /api/auth/login
 
-GET    /api/users/{id}
-PUT    /api/users/{id}
-GET    /api/users/{id}/followers
-GET    /api/users/{id}/following
-GET    /api/users/{id}/suggestions
+Para comprobar el fallo de almacenamiento por separado, ejecutar `./scripts/phase-d-outage-smoke.ps1`: detiene MinIO temporalmente, verifica `503` sin post huérfano y lo reinicia en `finally`. No ejecutarlo mientras otra persona esté usando ese servicio local.
 
-POST   /api/users/{id}/follow
-DELETE /api/users/{id}/follow
+Los smoke usan usuarios temporales con nombres únicos y eliminan únicamente los datos que generan. Requieren los servicios levantados y `.env` local para la limpieza de prueba. La puerta de salida y los casos todavía no verificados se mantienen en [PLAN.md](PLAN.md).
 
-POST   /api/posts
-GET    /api/posts/{id}
-DELETE /api/posts/{id}
+**Estado actual (27-09-2026):**
+- ✅ Arranque limpio (`docker compose down -v && docker compose up --build`) verificado
+- ✅ Smokes A–G: todos PASS (53 + 18 + 19 + 26 checks)
+- ✅ Tests unitarios backend: 9 PASS
+- ✅ Build + lint frontend: OK
+- ✅ Fix duplicados PushDelivery: query `DISTINCT` + constraint única `(postId, subscriptionId)`
 
-GET    /api/feed
+## Alcance pendiente
 
-GET    /api/graph/users/{id}/common-connections
-GET    /api/graph/users/{id}/reachable
-GET    /api/graph/users/{id}/recommended
+La entrega Web Push con una pestaña cerrada y permiso concedido todavía requiere una prueba manual en un navegador/dispositivo que acepte notificaciones. El smoke automatizado verifica suscripciones, cola, autorización, ausencia de envío al dejar de seguir y las cinco consultas; el test Java prepara una solicitud cifrada y firmada sin enviarla. Ninguno prueba la entrega por un proveedor externo, y una prueba de egress real hacia FCM requiere aprobación explícita. Presencia online y verificación completa desde volúmenes nuevos siguen pendientes.
 
-WS     /ws/chat/{conversationId}
-```
-
-## Mecanismos distribuidos
-
-### REST
-Operaciones CRUD convencionales. Stateless, cacheable, estandarizado.
-
-### WebSocket
-Chat en tiempo real. Conexión persistente bidireccional entre cliente y servidor.  
-Diferencia clave con REST: no hay request/response — el servidor puede enviar mensajes sin que el cliente los solicite.
-
-### Web Push
-Notificaciones fuera de la aplicación mediante el protocolo VAPID.  
-El navegador mantiene una suscripción push activa incluso cuando la app está cerrada.
-
-### Neo4j
-Base de datos de grafos para modelar relaciones sociales.  
-Las consultas Cypher aprovechan traversals de grafos que serían costosos en SQL.
-
-### MinIO (S3-compatible)
-Almacenamiento de objetos para archivos multimedia.  
-Separación clara: Neo4j guarda metadata, MinIO guarda los bytes.
-
-## Consultas Cypher implementadas
-
-<!-- TODO: documentar las 5+ consultas Cypher no triviales -->
-
-1. Feed personalizado (publicaciones de usuarios seguidos)
-2. Amigos en común
-3. Usuarios recomendados (seguidos de seguidos)
-4. Usuarios alcanzables a N niveles
-5. Ranking de publicaciones por reacciones en la red
-
-## Decisiones técnicas relevantes
-
-- **Quarkus** sobre Spring Boot: arranque más rápido, menor footprint en contenedores.
-- **MinIO** sobre almacenamiento local: API S3-compatible, fácil migración a cloud.
-- **Neo4j** modelado como grafo real: relaciones SIGUE, PUBLICA, REACCIONA como aristas tipadas.
-- **WebSocket Next** (Quarkus): API moderna, no blocking, basada en Vert.x.
+**Estrategia de tokens (implementada 27-09-2026):**
+- Access token: 15 min, almacenado **solo en memoria** (React state), nunca en localStorage
+- Refresh token: 30 días, cookie `HttpOnly; Secure; SameSite=Strict; Path=/api/auth/refresh`
+- `/api/auth/refresh`: rota el refresh token (revoca el usado, emite nuevo par)
+- `/api/auth/logout`: revoca refresh token en Neo4j y limpia la cookie
+- Frontend: intercepta 401 → llama refresh automáticamente → reintenta request original

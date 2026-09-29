@@ -1,0 +1,310 @@
+﻿import { useEffect, useMemo, useState } from 'react';
+
+const PAGE_SIZE = 5;
+import { Link } from 'react-router-dom';
+import { ArrowRight, Compass, Heart, Map as MapIcon, RefreshCw, Sparkles, TrendingUp, Users } from 'lucide-react';
+import { graphApi, usersApi } from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
+import './GraphPage.css';
+
+const tabs = [
+  { id: 'discover', label: 'Descubrir', Icon: Compass },
+  { id: 'activity', label: 'Actividad', Icon: TrendingUp },
+  { id: 'map', label: 'Mapa', Icon: MapIcon },
+];
+
+async function fetchNetwork(userId) {
+  const [reachable, recommendations, networkPosts, trendingPosts, following, discoverable] = await Promise.all([
+    graphApi.reachable(), graphApi.recommendations(), graphApi.networkPosts(),
+    graphApi.trendingPosts(), usersApi.getFollowing(userId), usersApi.discover(),
+  ]);
+  return { reachable, recommendations, networkPosts, trendingPosts, following, discoverable };
+}
+
+function Avatar({ username, avatarUrl, tone = 0, className = '' }) {
+  return <span className={`network-avatar tone-${tone % 4} ${className}`} aria-hidden="true">
+    {avatarUrl ? <img src={avatarUrl} alt="" /> : username?.slice(0, 1).toUpperCase() || '?'}
+  </span>;
+}
+
+function EmptyState({ title, description, action }) {
+  return <div className="network-empty">
+    <span className="network-empty-icon"><Sparkles size={21} /></span>
+    <strong>{title}</strong><p>{description}</p>
+    {action && <Link to="/feed" className="network-text-link">Explorar publicaciones <ArrowRight size={15} /></Link>}
+  </div>;
+}
+
+function PostPreview({ post, index, trending = false }) {
+  const date = new Date(post.createdAt);
+  const formattedDate = Number.isNaN(date.getTime()) ? ''
+    : date.toLocaleDateString('es-EC', { day: 'numeric', month: 'short' });
+  return <article className="network-post-card">
+    <div className="network-post-top">
+      <Link to={`/users/${post.authorId}`} className="network-post-author">
+        <Avatar username={post.authorUsername} tone={index} />
+        <span><strong>@{post.authorUsername}</strong><small>{formattedDate}</small></span>
+      </Link>
+      {trending && <span className="network-post-rank">#{index + 1} en tu red</span>}
+    </div>
+    <p className="network-post-copy">{post.content}</p>
+    <div className="network-post-bottom">
+      <span className="network-like-count"><Heart size={16} /> {post.likeCount} Me gusta</span>
+      <Link to={`/posts/${post.id}`}>Ver publicación <ArrowRight size={15} /></Link>
+    </div>
+  </article>;
+}
+
+export default function GraphPage() {
+  const { user } = useAuth();
+  const [data, setData] = useState(null);
+  const [following, setFollowing] = useState([]);
+  const [recentlyInteracted, setRecentlyInteracted] = useState([]);
+  const [activeTab, setActiveTab] = useState('discover');
+  const [peoplePage, setPeoplePage] = useState(0);
+  const [postOrder, setPostOrder] = useState('latest');
+  const [otherId, setOtherId] = useState('');
+  const [common, setCommon] = useState([]);
+  const [commonError, setCommonError] = useState('');
+  const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [followingId, setFollowingId] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    fetchNetwork(user.id).then((result) => {
+      if (!active) return;
+      setData(result); setFollowing(result.following || []); setError('');
+      setPeoplePage(0);
+    }).catch((err) => { if (active) setError(err.message || 'No se pudo cargar tu red.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [user.id]);
+
+  useEffect(() => {
+    if (!otherId) return;
+    let active = true;
+    graphApi.common(otherId).then((result) => {
+      if (active) { setCommon(result || []); setCommonError(''); }
+    }).catch(() => { if (active) { setCommon([]); setCommonError('No se pudieron consultar las conexiones.'); } });
+    return () => { active = false; };
+  }, [otherId]);
+
+  const refresh = async () => {
+    setRefreshing(true); setError('');
+    try {
+      const result = await fetchNetwork(user.id);
+      setData(result); setFollowing(result.following || []);
+    } catch (err) { setError(err.message || 'No se pudo actualizar tu red.'); }
+    finally { setRefreshing(false); setLoading(false); }
+  };
+
+  const toggleFollow = async (person) => {
+    if (followingId) return;
+    const wasFollowing = following.some(item => item.id === person.id);
+    setFollowingId(person.id); setActionError('');
+    try {
+      if (wasFollowing) await usersApi.unfollow(person.id);
+      else await usersApi.follow(person.id);
+      setFollowing(current => wasFollowing
+        ? current.filter(item => item.id !== person.id)
+        : current.some(item => item.id === person.id) ? current : [...current, person]);
+      setRecentlyInteracted(current => current.some(item => item.id === person.id) ? current : [...current, person]);
+      await refresh();
+    } catch (err) { setActionError(err.message || 'No se pudo actualizar el seguimiento.'); }
+    finally { setFollowingId(''); }
+  };
+
+  const graph = useMemo(() => {
+    if (!data) return { nodes: [], edges: [] };
+    const nodes = [{ id: user.id, username: user.username, distance: 0 }, ...(data.reachable || [])];
+    const index = new Map(nodes.map((node, i) => [node.id, {
+      ...node,
+      x: 350 + (node.distance === 0 ? 0 : (node.distance === 1 ? 130 : 240) * Math.cos((i * 2.399) - 1)),
+      y: 280 + (node.distance === 0 ? 0 : (node.distance === 1 ? 130 : 190) * Math.sin((i * 2.399) - 1)),
+    }]));
+    const edges = (data.reachable || []).map((node) => ({ from: node.distance === 1 ? user.id : node.viaId, to: node.id }));
+    return { nodes: [...index.values()], edges };
+  }, [data, user.id, user.username]);
+
+  const direct = (data?.reachable || []).filter((person) => person.distance === 1);
+  const second = (data?.reachable || []).filter((person) => person.distance === 2);
+  const directById = new Map(direct.map((person) => [person.id, person.username]));
+  const posts = postOrder === 'latest' ? data?.networkPosts || [] : data?.trendingPosts || [];
+  const followedIds = new Set(following.map(person => person.id));
+  const peopleById = new Map();
+  for (const person of [...following, ...recentlyInteracted, ...(data?.recommendations || []), ...(data?.discoverable || [])]) {
+    if (person.id !== user.id && !peopleById.has(person.id)) {
+      peopleById.set(person.id, { ...person, alreadyFollowing: followedIds.has(person.id) });
+    }
+  }
+  const people = [...peopleById.values()];
+
+  return <section className="network-page">
+    <header className="network-hero">
+      <div className="network-hero-content">
+        <span className="network-eyebrow"><span className="network-eyebrow-dot" /> TU COMUNIDAD</span>
+        <h1>Tu red, <span>tus personas.</span></h1>
+        <p>Descubre nuevas voces, encuentra conexiones en común y mira lo que comparte tu círculo.</p>
+        <div className="network-stats" aria-label="Resumen de tu red">
+          <span><strong>{following.length}</strong> Siguiendo</span>
+          <span><strong>{people.length - following.length}</strong> Por descubrir</span>
+          <span><strong>{data?.networkPosts?.length || 0}</strong> Publicaciones</span>
+        </div>
+      </div>
+      <div className="network-hero-orbits" aria-hidden="true">
+        <span className="orbit orbit-one" /><span className="orbit orbit-two" /><span className="orbit orbit-three" />
+        <Avatar username={user.username} avatarUrl={user.avatarUrl} className="hero-avatar hero-avatar-self" />
+        {following.slice(0, 3).map((person, index) => <Avatar key={person.id} username={person.username}
+          avatarUrl={person.avatarUrl} tone={index + 1} className={`hero-avatar hero-avatar-${index + 1}`} />)}
+      </div>
+    </header>
+
+    <div className="network-toolbar">
+      <div className="network-tabs" role="tablist" aria-label="Vistas de tu red">
+        {tabs.map(({ id, label, Icon }) => <button key={id} type="button" role="tab"
+          aria-selected={activeTab === id} className={activeTab === id ? 'active' : ''}
+          onClick={() => setActiveTab(id)}><Icon size={17} /> {label}</button>)}
+      </div>
+      <button type="button" className="network-refresh" onClick={refresh} disabled={refreshing || loading}
+        aria-label="Actualizar red"><RefreshCw size={17} className={refreshing ? 'spinning' : ''} /></button>
+    </div>
+
+    {error && <div className="network-alert" role="alert">{error} <button type="button" onClick={refresh}>Reintentar</button></div>}
+    {actionError && <p className="network-action-error" role="alert">{actionError}</p>}
+    {loading && <div className="network-loading" role="status">Cargando personas y publicaciones de tu red...</div>}
+
+    {data && activeTab === 'discover' && <div className="network-layout">
+      <div className="network-main-column">
+        <section className="network-section" aria-labelledby="suggestions-title">
+          <div className="network-section-heading"><div><span className="network-section-kicker"><Sparkles size={15} /> PARA TI</span>
+            <h2 id="suggestions-title">Personas de tu órbita</h2><p>Tu círculo y nuevas personas por descubrir. Puedes dejar de seguir cuando quieras.</p></div></div>
+          {people.length ? (() => {
+            const totalPages = Math.ceil(people.length / PAGE_SIZE);
+            const pagePeople = people.slice(peoplePage * PAGE_SIZE, (peoplePage + 1) * PAGE_SIZE);
+            return (
+              <>
+                <div className="network-people-grid">
+                  {pagePeople.map((person, index) => (
+                    <article className="network-person-card" key={person.id}>
+                      <Avatar username={person.username} avatarUrl={person.avatarUrl} tone={peoplePage * PAGE_SIZE + index} />
+                      <Link to={`/users/${person.id}`} className="network-person-name">@{person.username}</Link>
+                      <p>{person.alreadyFollowing ? 'Ya forma parte de tu círculo' : person.mutualCount ? `${person.mutualCount} conexión${person.mutualCount === 1 ? '' : 'es'} en común` : 'Una nueva voz para tu órbita'}</p>
+                      <small>{person.alreadyFollowing ? 'Puedes visitar su perfil o dejar de seguir.' : person.viaUsernames?.length ? `A través de ${person.viaUsernames.map((name) => `@${name}`).join(', ')}` : 'Descubre su perfil y sus publicaciones.'}</small>
+                      <button type="button" className={`network-follow ${person.alreadyFollowing ? 'network-following' : ''}`} onClick={() => toggleFollow(person)} disabled={Boolean(followingId)}>
+                        {followingId === person.id ? 'Actualizando...' : person.alreadyFollowing ? 'Dejar de seguir' : 'Seguir'}
+                      </button>
+                    </article>
+                  ))}
+                </div>
+                {totalPages > 1 && (
+                  <div className="network-pagination" role="navigation" aria-label="Paginación de personas">
+                    <button type="button" className="network-page-btn" onClick={() => setPeoplePage((p) => Math.max(0, p - 1))} disabled={peoplePage === 0} aria-label="Página anterior">
+                      ← Anterior
+                    </button>
+                    <span className="network-page-info">{peoplePage + 1} / {totalPages}</span>
+                    <button type="button" className="network-page-btn" onClick={() => setPeoplePage((p) => Math.min(totalPages - 1, p + 1))} disabled={peoplePage === totalPages - 1} aria-label="Página siguiente">
+                      Siguiente →
+                    </button>
+                  </div>
+                )}
+              </>
+            );
+          })() : <EmptyState
+            title={following.length ? 'No hay nuevas sugerencias' : 'Tu círculo está empezando'}
+            description={following.length ? 'Ya sigues a las personas cercanas a tu círculo. Vuelve pronto para descubrir más.' : 'Sigue a personas para descubrir a quiénes conocen.'}
+            action
+          />}
+        </section>
+
+        <section className="network-section" aria-labelledby="nearby-title">
+          <div className="network-section-heading"><div><span className="network-section-kicker"><Users size={15} /> TU ENTORNO</span>
+            <h2 id="nearby-title">Cerca de tu órbita</h2><p>Personas conectadas contigo en uno o dos pasos.</p></div></div>
+          {data.reachable.length ? <div className="network-nearby-list">
+            {data.reachable.map((person, index) => <Link key={person.id} to={`/users/${person.id}`} className="network-nearby-person">
+              <Avatar username={person.username} tone={index + 1} />
+              <span className="network-nearby-copy"><strong>@{person.username}</strong>
+                <small>{person.distance === 1 ? 'Sigues a esta persona' : `Conectado a través de @${directById.get(person.viaId) || 'tu red'}`}</small></span>
+              <span className="network-step">{person.distance === 1 ? 'Tu círculo' : '2 pasos'}</span>
+              <ArrowRight size={17} className="network-nearby-arrow" />
+            </Link>)}
+          </div> : <EmptyState title="Aún no hay conexiones" description="Cuando sigas a alguien, verás aquí cómo crece tu red." action />}
+        </section>
+      </div>
+
+      <aside className="network-side-column" aria-label="Resumen de conexiones">
+        <section className="network-side-card network-circle-card">
+          <span className="network-section-kicker"><Users size={15} /> TU CÍRCULO</span><h2>Gente que sigues</h2>
+          {following.length ? <div className="network-following-list">
+            {following.slice(0, 8).map((person, index) => <Link key={person.id} to={`/users/${person.id}`}>
+              <Avatar username={person.username} avatarUrl={person.avatarUrl} tone={index} />
+              <span>@{person.username}</span><ArrowRight size={15} />
+            </Link>)}
+            {following.length > 8 && <p className="network-more">Y {following.length - 8} personas más en tu círculo.</p>}
+          </div> : <p className="network-side-empty">Todavía no sigues a nadie.</p>}
+          <button className="network-map-link" type="button" onClick={() => setActiveTab('map')}>Ver mapa de conexiones <ArrowRight size={16} /></button>
+        </section>
+
+        <section className="network-side-card">
+          <span className="network-section-kicker"><Sparkles size={15} /> EN COMÚN</span><h2>Compartimos conexiones</h2>
+          <p>Elige alguien de tu círculo para descubrir a quiénes siguen ambos.</p>
+          <label htmlFor="compare-user" className="sr-only">Comparar conexiones con</label>
+          <select id="compare-user" value={otherId} onChange={(event) => { setOtherId(event.target.value); setCommon([]); setCommonError(''); }}>
+            <option value="">Selecciona una persona</option>
+            {following.map((person) => <option key={person.id} value={person.id}>@{person.username}</option>)}
+          </select>
+          {commonError && <p role="alert" className="network-action-error">{commonError}</p>}
+          {otherId && !commonError && (common.length ? <div className="network-common-list">
+            {common.map((person, index) => <Link to={`/users/${person.id}`} key={person.id}>
+              <Avatar username={person.username} tone={index + 2} /><span>@{person.username}</span>
+            </Link>)}
+          </div> : <p className="network-side-empty">No siguen a las mismas personas por ahora.</p>)}
+        </section>
+      </aside>
+    </div>}
+
+    {data && activeTab === 'activity' && <section className="network-activity" aria-labelledby="activity-title">
+      <div className="network-section-heading"><div><span className="network-section-kicker"><TrendingUp size={15} /> ACTIVIDAD</span>
+        <h2 id="activity-title">Lo que pasa en tu círculo</h2><p>Publicaciones reales de las personas que sigues.</p></div></div>
+      <div className="network-post-filters" aria-label="Orden de publicaciones">
+        <button type="button" className={postOrder === 'latest' ? 'active' : ''} onClick={() => setPostOrder('latest')}>Más recientes</button>
+        <button type="button" className={postOrder === 'popular' ? 'active' : ''} onClick={() => setPostOrder('popular')}>Más destacadas</button>
+      </div>
+      {posts.length ? <div className="network-post-list">{posts.map((post, index) => <PostPreview key={post.id} post={post} index={index} trending={postOrder === 'popular'} />)}</div>
+        : <EmptyState
+          title="Todavía no hay publicaciones"
+          description={following.length ? 'Las personas que sigues aún no han publicado. Vuelve pronto para ver sus novedades.' : 'Sigue a personas y vuelve para ver sus novedades.'}
+          action
+        />}
+    </section>}
+
+    {data && activeTab === 'map' && <section className="network-map-section" aria-labelledby="map-title">
+      <div className="network-section-heading"><div><span className="network-section-kicker"><MapIcon size={15} /> MAPA SOCIAL</span>
+        <h2 id="map-title">Así se conecta tu órbita</h2>
+        <p>Las flechas representan a quién sigue cada persona. Tu círculo aparece en azul; las personas a dos pasos, en violeta.</p></div></div>
+      <div className="network-map-key"><span><i className="key-self" /> Tú</span><span><i className="key-direct" /> Tu círculo</span><span><i className="key-second" /> A dos pasos</span></div>
+      <div className="network-map-canvas" role="img" aria-label={`Mapa de ${graph.nodes.length} personas y ${graph.edges.length} conexiones`}>
+        <svg viewBox="0 0 700 560" aria-hidden="true">
+          <defs><marker id="follow-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#aba3d0" /></marker></defs>
+          <circle cx="350" cy="280" r="130" className="map-ring" /><circle cx="350" cy="280" r="245" className="map-ring map-ring-outer" />
+          {graph.edges.map((edge) => {
+            const from = graph.nodes.find((node) => node.id === edge.from);
+            const to = graph.nodes.find((node) => node.id === edge.to);
+            if (!from || !to) return null;
+            const dx = to.x - from.x; const dy = to.y - from.y; const length = Math.hypot(dx, dy) || 1;
+            return <line key={`${edge.from}-${edge.to}`} className="map-edge" x1={from.x} y1={from.y}
+              x2={to.x - dx / length * 29} y2={to.y - dy / length * 29} markerEnd="url(#follow-arrow)" />;
+          })}
+          {graph.nodes.map((node) => <g key={node.id} className={`map-node map-node-${node.distance}`}>
+            <circle cx={node.x} cy={node.y} r="27" />
+            <text className="map-initial" x={node.x} y={node.y + 5} textAnchor="middle">{node.username.slice(0, 1).toUpperCase()}</text>
+            <text className="map-name" x={node.x} y={node.y + 46} textAnchor="middle">@{node.username}</text>
+          </g>)}
+        </svg>
+      </div>
+      <div className="network-map-footer"><span>{direct.length} en tu círculo</span><span>{second.length} personas a dos pasos</span></div>
+    </section>}
+  </section>;
+}

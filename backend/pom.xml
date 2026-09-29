@@ -18,7 +18,13 @@
     <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
     <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
     <quarkus.platform.version>3.15.1</quarkus.platform.version>
-    <quarkiverse.amazonservices.version>2.17.3</quarkiverse.amazonservices.version>
+    <!-- Must stay on the line built against Quarkus 3.15.x: 2.18.x declares
+         quarkus.version=3.15.0, 2.19.0 jumps to 3.16.0. The previously
+         declared 2.17.3 was never published (2.17.0 -> 2.18.0), which made
+         the whole POM unresolvable and failed the build before compilation. -->
+    <quarkiverse.amazonservices.version>2.18.1</quarkiverse.amazonservices.version>
+    <!-- Quarkiverse Neo4j client, built against Quarkus 3.15.0. -->
+    <quarkiverse.neo4j.version>4.4.0</quarkiverse.neo4j.version>
     <skipITs>true</skipITs>
     <surefire-plugin.version>3.3.1</surefire-plugin.version>
   </properties>
@@ -53,10 +59,11 @@
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-rest-jackson</artifactId>
     </dependency>
-    <dependency>
-      <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-rest-multipart</artifactId>
-    </dependency>
+    <!-- Multipart: intentionally absent. The previous quarkus-rest-multipart
+         coordinate does not exist, and the only Quarkus 3.15 artifact that
+         does (quarkus-resteasy-multipart) pulls in the classic RESTEasy stack,
+         which clashes with quarkus-rest over the io.quarkus.rest capability.
+         No code in src/main/java references multipart, so nothing is lost. -->
 
     <!-- ── WebSocket (Next generation API) ─────────────────────────────────── -->
     <dependency>
@@ -65,9 +72,15 @@
     </dependency>
 
     <!-- ── Neo4j ────────────────────────────────────────────────────────────── -->
+    <!-- io.quarkus:quarkus-neo4j has no release past 3.0.0.Beta1, so it cannot
+         supply @Inject Driver on Quarkus 3.15. The maintained extension is the
+         Quarkiverse one; 4.4.0 is the release built against quarkus.version
+         3.15.0, matching this project's platform. It is versioned explicitly
+         because no BOM is imported for it. -->
     <dependency>
-      <groupId>io.quarkus</groupId>
+      <groupId>io.quarkiverse.neo4j</groupId>
       <artifactId>quarkus-neo4j</artifactId>
+      <version>${quarkiverse.neo4j.version}</version>
     </dependency>
 
     <!-- ── JWT Authentication ───────────────────────────────────────────────── -->
@@ -124,6 +137,25 @@
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-arc</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-scheduler</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>nl.martijndwars</groupId>
+      <artifactId>web-push</artifactId>
+      <version>5.1.2</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>httpasyncclient</artifactId>
+      <version>4.1.5</version>
+    </dependency>
+    <dependency>
+      <groupId>org.bouncycastle</groupId>
+      <artifactId>bcprov-jdk18on</artifactId>
+      <version>1.78.1</version>
     </dependency>
 
     <!-- ── Testing ──────────────────────────────────────────────────────────── -->

@@ -1,0 +1,199 @@
+.dashboard-main.feed-page { background: linear-gradient(155deg, #f7f8ff 0%, #fbfaff 57%, #f7f4ff 100%); }
+.feed-page:not(.dashboard-main) { width: 100%; padding-bottom: 48px; color: #242442; }
+.feed-page button:focus-visible, .feed-page a:focus-visible, .feed-page textarea:focus-visible { outline: 3px solid #8f67d9; outline-offset: 3px; }
+
+/* ── Hero (editorial horizontal strip, not the orbit layout) ───────────────── */
+.feed-page .feed-hero {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 32px;
+  min-height: 156px;
+  padding: 32px 40px;
+  border: 1px solid #3b356d;
+  border-radius: 26px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 10% 50%, rgba(142, 116, 255, .22), transparent 44%),
+    linear-gradient(147deg, #141735 0%, #10122b 53%, #1b1640 100%);
+  box-shadow: 0 22px 48px rgba(31, 27, 82, .18);
+}
+
+/* Diagonal stripe pattern (replaces dot-grid from network) */
+.feed-page .feed-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: .28;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(200, 185, 255, .5) 0px,
+    rgba(200, 185, 255, .5) 1px,
+    transparent 1px,
+    transparent 18px
+  );
+}
+
+/* Right-side glow */
+.feed-page .feed-hero::after {
+  content: '';
+  position: absolute;
+  right: -60px;
+  top: -60px;
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(160, 120, 255, .18), transparent 65%);
+  z-index: -1;
+  pointer-events: none;
+}
+
+.feed-page .feed-hero-content { position: relative; z-index: 1; }
+
+.feed-page .feed-hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 11px;
+  margin-bottom: 13px;
+  border: 1px solid rgba(216, 210, 255, .2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .055);
+  color: #d4cef8;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .13em;
+}
+
+.feed-hero-eyebrow-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #e6a4fa;
+  box-shadow: 0 0 0 4px rgba(207, 145, 255, .14);
+  flex-shrink: 0;
+}
+
+.feed-page .feed-hero h1 {
+  margin: 0 0 9px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(26px, 3.2vw, 38px);
+  line-height: 1.1;
+  letter-spacing: -.04em;
+  color: #f8f7ff;
+}
+
+.feed-page .feed-hero h1 span { color: #d5b9ff; }
+
+.feed-page .feed-hero p { max-width: 420px; color: #c3c4df; font-size: 14px; line-height: 1.65; margin: 0; }
+
+/* Right decorative block */
+.feed-hero-deco {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.feed-hero-deco-line {
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(180, 150, 255, .6));
+}
+
+.feed-hero-deco-line:nth-child(1) { width: 90px; }
+.feed-hero-deco-line:nth-child(2) { width: 58px; opacity: .7; }
+.feed-hero-deco-line:nth-child(3) { width: 72px; opacity: .45; }
+.feed-hero-deco-line:nth-child(4) { width: 40px; opacity: .25; }
+
+/* ── Toolbar ──────────────────────────────────────────────────────────────── */
+.feed-page .feed-toolbar, .feed-page .create-post-card, .feed-page .feed-content {
+  width: min(100%, 820px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.feed-page .feed-toolbar { display: flex; align-items: center; margin-top: 25px; margin-bottom: 18px; }
+
+.feed-page .feed-tabs {
+  display: flex;
+  gap: 5px;
+  padding: 5px;
+  border: 1px solid #e2dcf4;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 6px 22px rgba(60, 45, 118, .05);
+}
+
+.feed-page .feed-tabs button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 39px; padding: 9px 15px; border: 0; border-radius: 10px;
+  background: transparent; color: #6f6a88;
+  font-size: 13px; font-weight: 700; cursor: pointer;
+  transition: background .2s, color .2s, box-shadow .2s;
+}
+
+.feed-page .feed-tabs button:hover { background: #f6f2ff; color: #6249a8; }
+.feed-page .feed-tabs button.active { background: #efeaff; color: #6547b8; box-shadow: inset 0 0 0 1px #e3d8ff; }
+
+/* ── Feed posts ───────────────────────────────────────────────────────────── */
+.feed-page .feed-posts { display: flex; flex-direction: column; gap: 14px; }
+
+.feed-page .feed-load-more {
+  display: block; width: 100%; margin: 17px auto 0;
+  padding: 12px 24px;
+  border: 1px solid #dcd1f2; border-radius: 12px;
+  background: #fff; color: #6849af;
+  font-size: 13px; font-weight: 800; cursor: pointer;
+  transition: background .18s, border-color .18s;
+}
+
+.feed-page .feed-load-more:hover:not(:disabled) { background: #f2ecff; border-color: #c7b1ed; }
+.feed-page .feed-load-more:disabled { opacity: .5; cursor: wait; }
+
+.feed-page .feed-page-error, .feed-page .network-alert {
+  margin-top: 15px; padding: 12px 16px;
+  border: 1px solid #ffd2da; border-radius: 12px;
+  background: #fff0f2; color: #a73b4c; font-size: 13px;
+}
+
+.feed-page .network-alert { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.feed-page .network-alert button { background: transparent; color: inherit; font-weight: 800; text-decoration: underline; }
+.feed-page .network-loading { padding: 44px 16px; color: #77718d; text-align: center; }
+
+.feed-page .network-empty {
+  display: flex; flex-direction: column; align-items: center;
+  margin: 0; padding: 45px 24px;
+  border: 1px dashed #d9c9f2; border-radius: 18px;
+  background: #fbf9ff; text-align: center;
+}
+
+.feed-page .network-empty-icon {
+  display: grid; place-items: center;
+  width: 44px; height: 44px; margin-bottom: 12px;
+  border-radius: 14px; background: #eee7ff; color: #805bc1;
+}
+
+.feed-page .network-empty strong { color: #302848; font-size: 15px; }
+.feed-page .network-empty p { max-width: 340px; margin-top: 7px; color: #837a98; font-size: 12px; line-height: 1.5; }
+.feed-page .network-empty-hint { color: #a197ae !important; }
+
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+@media (max-width: 740px) {
+  .feed-page .feed-hero { grid-template-columns: 1fr; }
+  .feed-hero-deco { display: none; }
+}
+
+@media (max-width: 620px) {
+  .feed-page .feed-hero { min-height: 0; padding: 26px 22px; }
+  .feed-page .feed-hero h1 { font-size: 27px; }
+  .feed-page .feed-tabs { width: 100%; }
+  .feed-page .feed-tabs button { flex: 1; min-width: 0; padding: 9px 10px; font-size: 12px; }
+}

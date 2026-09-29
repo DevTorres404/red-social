@@ -10,8 +10,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "date-fns": "^4.4.0",
+    "framer-motion": "^13.4.4",
+    "lucide-react": "^1.48.0",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "react-router-dom": "^7.18.4",
+    "three": "^0.186.1",
+    "vanta": "^0.5.24"
   },
   "devDependencies": {
     "@types/react": "^19.2.18",

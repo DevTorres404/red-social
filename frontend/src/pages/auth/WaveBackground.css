@@ -1,0 +1,549 @@
+/* Wave Background - Light & Airy (Orbit Theme) */
+/* Soft pastel spectrum: sky -> periwinkle -> lavender -> lilac -> rose */
+/* Bright, airy, harmonious, fully responsive */
+
+.orbit-container {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: 0;
+}
+
+/* Base - very light, airy foundation */
+.orbit-base {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg,
+    #f8fafc 0%,
+    #f1f5f9 15%,
+    #e0e7ff 35%,
+    #e0e7ff 55%,
+    #ede9fe 75%,
+    #f5f3ff 100%
+  );
+  background-image: 
+    radial-gradient(ellipse 70% 50% at 50% 35%, rgba(165, 180, 252, 0.3) 0%, transparent 65%),
+    radial-gradient(ellipse 50% 40% at 80% 20%, rgba(167, 139, 250, 0.2), transparent 50%),
+    radial-gradient(ellipse 40% 30% at 20% 80%, rgba(244, 114, 182, 0.15), transparent 45%);
+}
+
+/* SVG canvas */
+.orbit-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* Base wave path styles */
+.orbit-path {
+  animation: orbit-flow 20s ease-in-out infinite;
+  will-change: transform, opacity;
+  transform-origin: center bottom;
+  transform-box: fill-box;
+  pointer-events: none;
+}
+
+/* Wave layers - light & visible */
+.orbit-1 {
+  animation-duration: 18s;
+  animation-delay: 0s;
+  opacity: 0.9;
+}
+
+.orbit-2 {
+  animation-duration: 22s;
+  animation-delay: -2.5s;
+  opacity: 0.8;
+}
+
+.orbit-3 {
+  animation-duration: 24s;
+  animation-delay: -5s;
+  opacity: 0.7;
+}
+
+.orbit-4 {
+  animation-duration: 28s;
+  animation-delay: -8s;
+  opacity: 0.55;
+}
+
+.orbit-5 {
+  animation-duration: 32s;
+  animation-delay: -12s;
+  opacity: 0.4;
+}
+
+.orbit-6 {
+  animation-duration: 40s;
+  animation-delay: -18s;
+  opacity: 0.5;
+}
+
+/* Main wave flow - gentle, airy motion */
+@keyframes orbit-flow {
+  0%, 100% {
+    transform: translateX(0) translateY(0) scaleX(1);
+    opacity: 1;
+  }
+  15% {
+    transform: translateX(-15px) translateY(-4px) scaleX(1.01);
+    opacity: 0.95;
+  }
+  30% {
+    transform: translateX(-20px) translateY(-8px) scaleX(1.02);
+    opacity: 0.9;
+  }
+  50% {
+    transform: translateX(18px) translateY(6px) scaleX(0.985);
+    opacity: 0.95;
+  }
+  70% {
+    transform: translateX(12px) translateY(4px) scaleX(1.008);
+    opacity: 0.98;
+  }
+  85% {
+    transform: translateX(-10px) translateY(-3px) scaleX(1.008);
+    opacity: 0.98;
+  }
+}
+
+/* Shimmer sweep - bright white highlight */
+.orbit-shimmer {
+  animation: shimmer-sweep 8s ease-in-out infinite;
+  will-change: transform, opacity;
+  transform-origin: center;
+  transform-box: fill-box;
+  pointer-events: none;
+  opacity: 0;
+}
+
+@keyframes shimmer-sweep {
+  0%, 100% {
+    transform: translateX(-100%) scaleX(0.5);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.7;
+  }
+  40% {
+    transform: translateX(0%) scaleX(1.2);
+    opacity: 0.9;
+  }
+  60% {
+    opacity: 0.6;
+  }
+  80% {
+    transform: translateX(100%) scaleX(0.5);
+    opacity: 0.3;
+  }
+}
+
+/* Vignette - very subtle */
+.orbit-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(226, 232, 240, 0.3) 100%);
+  pointer-events: none;
+}
+
+/* Center glow - very subtle */
+.orbit-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 500px;
+  height: 300px;
+  background: radial-gradient(ellipse at center,
+    rgba(165, 180, 252, 0.15) 0%,
+    rgba(167, 139, 250, 0.1) 40%,
+    rgba(244, 114, 182, 0.05) 70%,
+    transparent 100%
+  );
+  border-radius: 50%;
+  filter: blur(60px);
+  pointer-events: none;
+  opacity: 0.4;
+  animation: glow-pulse 10s ease-in-out infinite;
+}
+
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.25; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 0.5; transform: translate(-50%, -50%) scale(1.03); }
+}
+
+/* Floating particles - very subtle */
+.orbit-stardust {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: 
+    radial-gradient(circle at 12% 15%, rgba(165, 180, 252, 0.25) 1px, transparent 2px),
+    radial-gradient(circle at 85% 85%, rgba(167, 139, 250, 0.2) 1px, transparent 2px),
+    radial-gradient(circle at 35% 55%, rgba(244, 114, 182, 0.15) 1px, transparent 1px),
+    radial-gradient(circle at 90% 10%, rgba(16, 185, 129, 0.15) 1px, transparent 1px),
+    radial-gradient(circle at 60% 30%, rgba(245, 158, 11, 0.1) 1px, transparent 1px);
+  background-size: 
+    450px 450px,
+    400px 400px,
+    350px 350px,
+    300px 300px,
+    280px 280px;
+  animation: particles-drift 80s linear infinite;
+  opacity: 0.35;
+}
+
+@keyframes particles-drift {
+  0% { transform: translate(0, 0); }
+  15% { transform: translate(-15px, -12px); }
+  30% { transform: translate(20px, -18px); }
+  45% { transform: translate(-10px, 22px); }
+  60% { transform: translate(25px, 10px); }
+  75% { transform: translate(-18px, -8px); }
+  100% { transform: translate(0, 0); }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .orbit-path,
+  .orbit-shimmer,
+  .orbit-particles,
+  .orbit-glow {
+    animation: none;
+  }
+  .orbit-path {
+    opacity: 0.2;
+  }
+  .orbit-shimmer {
+    display: none;
+  }
+  .orbit-glow {
+    opacity: 0.1;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .orbit-path {
+    opacity: 0.4;
+  }
+  .orbit-shimmer {
+    display: none;
+  }
+  .orbit-vignette {
+    background: radial-gradient(ellipse at center, transparent 30%, rgba(0, 0, 0, 0.3) 100%);
+  }
+  .orbit-glow {
+    display: none;
+  }
+  .orbit-particles {
+    display: none;
+  }
+}
+
+/* ==================== RESPONSIVE BREAKPOINTS ==================== */
+
+/* Large desktop (1200px+) - Full experience */
+@media (min-width: 1200px) {
+  .orbit-svg {
+    height: 400px;
+  }
+  .orbit-base {
+    background-image: 
+      radial-gradient(ellipse 70% 50% at 50% 35%, rgba(165, 180, 252, 0.3), transparent 65%),
+      radial-gradient(ellipse 50% 40% at 80% 20%, rgba(167, 139, 250, 0.2), transparent 50%),
+    radial-gradient(ellipse 40% 30% at 20% 80%, rgba(244, 114, 182, 0.15), transparent 45%);
+}
+
+/* Desktop (992px - 1199px) */
+@media (max-width: 1199px) and (min-width: 992px) {
+  .orbit-svg {
+    height: 380px;
+  }
+  .orbit-base {
+    background-image: 
+      radial-gradient(ellipse 70% 50% at 50% 35%, rgba(165, 180, 252, 0.25), transparent 65%),
+      radial-gradient(ellipse 50% 40% at 80% 20%, rgba(167, 139, 250, 0.2), transparent 50%),
+      radial-gradient(ellipse 40% 30% at 20% 80%, rgba(244, 114, 182, 0.15), transparent 45%);
+  }
+  .orbit-glow {
+    width: 400px;
+    height: 250px;
+  }
+  .pulsar-glow {
+    r: 150;
+  }
+}
+
+/* Tablet (768px - 991px) */
+@media (max-width: 991px) and (min-width: 768px) {
+  .orbit-svg {
+    height: 350px;
+  }
+  .orbit-base {
+    background-image: 
+      radial-gradient(ellipse 70% 50% at 50% 35%, rgba(165, 180, 252, 0.2), transparent 65%),
+      radial-gradient(ellipse 50% 40% at 80% 20%, rgba(167, 139, 250, 0.18), transparent 50%),
+      radial-gradient(ellipse 40% 30% at 20% 80%, rgba(244, 114, 182, 0.12), transparent 45%);
+  }
+  .orbit-path {
+    opacity: 0.85; /* Slightly higher opacity for smaller screens */
+  }
+  .orbit-1 { opacity: 0.9; }
+  .orbit-2 { opacity: 0.8; }
+  .orbit-3 { opacity: 0.7; }
+  .orbit-4 { opacity: 0.55; }
+  .orbit-5 { opacity: 0.4; }
+  .orbit-6 { opacity: 0.5; }
+  .orbit-glow {
+    width: 350px;
+    height: 220px;
+  }
+  .pulsar-glow {
+    r: 140;
+  }
+  .orbital-ring {
+    stroke-width: 1.5;
+  }
+}
+
+/* Mobile landscape (576px - 767px) */
+@media (max-width: 767px) and (min-width: 576px) {
+  .orbit-svg {
+    height: 320px;
+  }
+  .orbit-base {
+    background: linear-gradient(135deg,
+      #f8fafc 0%,
+      #f1f5f9 15%,
+      #e0e7ff 35%,
+      #e0e7ff 55%,
+      #ede9fe 75%,
+      #f5f3ff 100%
+    );
+    background-image: 
+      radial-gradient(ellipse 70% 50% at 50% 35%, rgba(165, 180, 252, 0.2), transparent 65%),
+      radial-gradient(ellipse 50% 40% at 80% 20%, rgba(167, 139, 250, 0.18), transparent 50%),
+      radial-gradient(ellipse 40% 30% at 20% 80%, rgba(244, 114, 182, 0.12), transparent 45%);
+  }
+  .orbit-path {
+    opacity: 0.85;
+  }
+  .orbit-1 { opacity: 0.9; }
+  .orbit-2 { opacity: 0.8; }
+  .orbit-3 { opacity: 0.7; }
+  .orbit-4 { opacity: 0.55; }
+  .orbit-5 { opacity: 0.4; }
+  .orbit-6 { opacity: 0.5; }
+  .orbit-glow {
+    width: 300px;
+    height: 200px;
+  }
+  .pulsar-glow {
+    r: 120;
+  }
+  .orbit-stardust {
+    opacity: 0.3;
+  }
+  .orbit-vignette {
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(226, 232, 240, 0.25) 100%);
+  }
+}
+
+/* Mobile portrait (320px - 575px) */
+@media (max-width: 575px) {
+  .orbit-svg {
+    height: 280px;
+  }
+  .orbit-base {
+    background: linear-gradient(135deg,
+      #ffffff 0%,
+      #f8fafc 15%,
+      #eef2ff 35%,
+      #ede9fe 55%,
+      #faf5ff 75%,
+      #faf5ff 100%
+    );
+    background-image: 
+      radial-gradient(ellipse 70% 50% at 50% 35%, rgba(165, 180, 252, 0.18), transparent 65%),
+      radial-gradient(ellipse 50% 40% at 80% 20%, rgba(167, 139, 250, 0.15), transparent 50%),
+      radial-gradient(ellipse 40% 30% at 20% 80%, rgba(244, 114, 182, 0.1), transparent 45%);
+  }
+  .orbit-path {
+    opacity: 0.8;
+  }
+  .orbit-1 { opacity: 0.85; }
+  .orbit-2 { opacity: 0.75; }
+  .orbit-3 { opacity: 0.65; }
+  .orbit-4 { opacity: 0.5; }
+  .orbit-5 { opacity: 0.35; }
+  .orbit-6 { opacity: 0.45; }
+  .orbit-glow {
+    width: 250px;
+    height: 160px;
+  }
+  .pulsar-glow {
+    r: 100;
+  }
+  .orbit-stardust {
+    opacity: 0.25;
+  }
+  .orbit-vignette {
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(226, 232, 240, 0.2) 100%);
+  }
+  .orbit-shimmer {
+    animation-duration: 10s;
+  }
+  .orbit-path {
+    animation-duration: 25s;
+  }
+  .orbit-1 { animation-duration: 22s; }
+  .orbit-2 { animation-duration: 28s; }
+  .orbit-3 { animation-duration: 30s; }
+  .orbit-4 { animation-duration: 35s; }
+  .orbit-5 { animation-duration: 40s; }
+  .orbit-6 { animation-duration: 50s; }
+}
+
+/* Very small screens (320px - 374px) */
+@media (max-width: 374px) {
+  .orbit-svg {
+    height: 240px;
+  }
+  .orbit-base {
+    background: linear-gradient(135deg,
+      #ffffff 0%,
+      #f8fafc 15%,
+      #eef2ff 35%,
+      #ede9fe 55%,
+      #faf5ff 75%,
+      #faf5ff 100%
+    );
+  }
+  .orbit-path {
+    opacity: 0.75;
+  }
+  .orbit-glow {
+    width: 200px;
+    height: 130px;
+  }
+  .pulsar-glow {
+    r: 80;
+  }
+  .orbit-stardust {
+    opacity: 0.2;
+  }
+}
+
+/* Landscape mobile */
+@media (max-width: 767px) and (orientation: landscape) {
+  .orbit-svg {
+    height: 200px;
+  }
+  .orbit-base {
+    background: linear-gradient(135deg,
+      #f8fafc 0%,
+      #f1f5f9 15%,
+      #e0e7ff 35%,
+      #e0e7ff 55%,
+      #ede9fe 75%,
+      #f5f3ff 100%
+    );
+  }
+  .orbit-path {
+    opacity: 0.8;
+  }
+  .orbit-glow {
+    width: 400px;
+    height: 150px;
+  }
+  .pulsar-glow {
+    r: 100;
+  }
+  .orbit-stardust {
+    opacity: 0.3;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .orbit-path,
+  .orbit-shimmer,
+  .orbit-particles,
+  .orbit-glow,
+  .pulsar-glow,
+  .orbital-ring,
+  .orbit-stardust {
+    animation: none;
+  }
+  .orbit-path {
+    opacity: 0.3;
+  }
+  .orbit-shimmer {
+    display: none;
+  }
+  .orbit-glow {
+    opacity: 0.1;
+  }
+  .pulsar-glow {
+    opacity: 0.15;
+  }
+  .orbital-ring {
+    opacity: 0.1;
+  }
+  .orbit-stardust {
+    opacity: 0.1;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .orbit-path {
+    opacity: 0.5;
+  }
+  .orbit-shimmer {
+    display: none;
+  }
+  .orbit-vignette {
+    background: radial-gradient(ellipse at center, transparent 30%, rgba(0, 0, 0, 0.3) 100%);
+  }
+  .orbit-glow {
+    display: none;
+  }
+  .pulsar-glow {
+    display: none;
+  }
+  .orbital-ring {
+    display: none;
+  }
+  .orbit-stardust {
+    display: none;
+  }
+}
+
+/* Light mode base adjustments (explicit) */
+@media (prefers-color-scheme: light) {
+  .orbit-base {
+    background: linear-gradient(135deg,
+      #ffffff 0%,
+      #f8fafc 15%,
+      #eef2ff 35%,
+      #ede9fe 55%,
+      #faf5ff 75%,
+      #faf5ff 100%
+    );
+  }
+  .orbit-vignette {
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(226, 232, 240, 0.2) 100%);
+  }
+}
+
+/* Print styles */
+@media print {
+  .orbit-container {
+    display: none;
+  }
+}

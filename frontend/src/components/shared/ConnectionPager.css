@@ -1,0 +1,33 @@
+.connection-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  margin-top: 13px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.connection-pagination button {
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 1px solid #dcd1f2;
+  border-radius: 9px;
+  background: #f6f2ff;
+  color: #6545a6;
+  cursor: pointer;
+  font: inherit;
+}
+
+.connection-pagination button:hover:not(:disabled) { background: #ebe2ff; }
+.connection-pagination button:disabled { opacity: .45; cursor: not-allowed; }
+.connection-pagination button:focus-visible { outline: 2px solid #a681f2; outline-offset: 2px; }
+.connection-pagination span { white-space: nowrap; color: #77708d; }
+
+.profile-circle-card .connection-pagination button {
+  border-color: rgba(219, 200, 255, .35);
+  background: rgba(202, 172, 255, .16);
+  color: #eadbff;
+}
+.profile-circle-card .connection-pagination button:hover:not(:disabled) { background: rgba(202, 172, 255, .27); }
+.profile-circle-card .connection-pagination span { color: #c1bcdb; }

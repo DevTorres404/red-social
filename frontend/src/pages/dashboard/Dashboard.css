@@ -1,0 +1,76 @@
+/* ── Dashboard Layout ───────────────────────────────────────────────────── */
+.dashboard-layout {
+  min-height: 100vh;
+  background: transparent; /* Uses app background from index.css */
+  display: flex;
+  flex-direction: column;
+}
+
+/* Subtle page background for content area */
+.dashboard-main {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  padding: 32px 24px;
+  position: relative;
+}
+
+.dashboard-main::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 1200px;
+  height: 100%;
+  background: radial-gradient(ellipse at top center, 
+    rgba(37, 99, 235, 0.02) 0%, 
+    transparent 60%
+  );
+  pointer-events: none;
+  z-index: -1;
+}
+
+.dashboard-content {
+  width: 100%;
+  max-width: 900px;
+  position: relative;
+  z-index: 1;
+}
+
+/* Optional: Feed-specific background accent */
+.feed-page {
+  /* Feed content inherits dashboard layout */
+}
+
+/* Profile page - slightly different feel */
+.profile-page .dashboard-main::before {
+  background: radial-gradient(ellipse at top center, 
+    rgba(168, 85, 247, 0.025) 0%, 
+    transparent 60%
+  );
+}
+
+/* Messages page */
+.messages-page .dashboard-main::before {
+  background: radial-gradient(ellipse at top center, 
+    rgba(236, 72, 153, 0.02) 0%, 
+    transparent 60%
+  );
+}
+
+/* Graph page */
+.graph-page .dashboard-main::before {
+  background: radial-gradient(ellipse at top center, 
+    rgba(59, 130, 246, 0.025) 0%, 
+    transparent 60%
+  );
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .dashboard-main {
+    padding: 20px 16px;
+  }
+}

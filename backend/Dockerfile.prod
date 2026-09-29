@@ -1,0 +1,19 @@
+# Production builds Java from the checked-out source; never copies a stale
+# developer target/ directory into the image.
+FROM maven:3.9-eclipse-temurin-21 AS build
+WORKDIR /build
+COPY pom.xml ./
+COPY src ./src
+RUN mvn -B -ntp -DskipTests package
+
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /deployments
+RUN addgroup -S quarkus && adduser -S quarkus -G quarkus
+COPY --from=build --chown=quarkus:quarkus /build/target/quarkus-app/lib/ ./lib/
+COPY --from=build --chown=quarkus:quarkus /build/target/quarkus-app/*.jar ./
+COPY --from=build --chown=quarkus:quarkus /build/target/quarkus-app/app/ ./app/
+COPY --from=build --chown=quarkus:quarkus /build/target/quarkus-app/quarkus/ ./quarkus/
+USER quarkus
+EXPOSE 8080
+ENV JAVA_OPTS_APPEND="-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
+ENTRYPOINT ["java", "-jar", "quarkus-run.jar"]

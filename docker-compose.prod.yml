@@ -1,0 +1,146 @@
+# Standalone production stack. Never combine with docker-compose.yml:
+# Compose merges `ports` and would re-expose development ports 3000/8080/9000.
+# Required settings live in .env (start from .env.prod.example).
+name: orbit-prod
+
+services:
+  neo4j:
+    image: neo4j:5.26
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: "neo4j/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in .env}"
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p \"$${NEO4J_AUTH#*/}\" 'RETURN 1' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 40s
+    networks: [private]
+
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf -o /dev/null http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 20s
+    networks: [private]
+
+  minio-init:
+    image: minio/mc@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    restart: "no"
+    entrypoint: ["/bin/sh", "-ec"]
+    command: >-
+      mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD";
+      mc mb --ignore-existing "local/$$MINIO_BUCKET";
+      mc anonymous set none "local/$$MINIO_BUCKET";
+      mc anonymous set download "local/$$MINIO_BUCKET/avatars"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
+      MINIO_BUCKET: ${MINIO_BUCKET:-red-social}
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks: [private]
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    # Match the Linux owner of secrets/privateKey.pem (chmod 600). Do not make
+    # the signing key world-readable just to satisfy a container UID mismatch.
+    user: "${APP_UID:?Set APP_UID in .env}:${APP_GID:?Set APP_GID in .env}"
+    volumes:
+      - ./secrets:/deployments/config:ro
+    environment:
+      QUARKUS_PROFILE: prod
+      QUARKUS_NEO4J_URI: bolt://neo4j:7687
+      QUARKUS_NEO4J_AUTHENTICATION_USERNAME: neo4j
+      QUARKUS_NEO4J_AUTHENTICATION_PASSWORD: ${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in .env}
+      QUARKUS_S3_ENDPOINT_OVERRIDE: http://minio:9000
+      QUARKUS_S3_AWS_REGION: ${AWS_REGION:-us-east-1}
+      QUARKUS_S3_AWS_CREDENTIALS_TYPE: static
+      QUARKUS_S3_AWS_CREDENTIALS_STATIC_PROVIDER_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
+      QUARKUS_S3_AWS_CREDENTIALS_STATIC_PROVIDER_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
+      APP_MINIO_BUCKET: ${MINIO_BUCKET:-red-social}
+      APP_MINIO_PUBLIC_ENDPOINT: "https://${MEDIA_DOMAIN:?Set MEDIA_DOMAIN in .env}"
+      APP_WEBSOCKET_ALLOWED_ORIGIN: "https://${APP_DOMAIN:?Set APP_DOMAIN in .env}"
+      QUARKUS_HTTP_CORS_ORIGINS: "https://${APP_DOMAIN:?Set APP_DOMAIN in .env}"
+      SMALLRYE_JWT_SIGN_KEY_LOCATION: /deployments/config/privateKey.pem
+      MP_JWT_VERIFY_PUBLICKEY_LOCATION: /deployments/config/publicKey.pem
+      APP_VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:?Generate VAPID keys in .env}
+      APP_VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:?Generate VAPID keys in .env}
+      APP_VAPID_SUBJECT: ${VAPID_SUBJECT:?Set VAPID_SUBJECT in .env}
+      APP_SEED_ENABLED: "false"
+      APP_SEED_FORCE: "false"
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/q/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    networks: [private]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:80/"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    networks: [private]
+
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?Set APP_DOMAIN in .env}
+      MEDIA_DOMAIN: ${MEDIA_DOMAIN:?Set MEDIA_DOMAIN in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      frontend:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks: [private]
+
+networks:
+  private:
+
+volumes:
+  neo4j_data:
+  neo4j_logs:
+  minio_data:
+  caddy_data:
+  caddy_config:
