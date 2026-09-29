@@ -1,12 +1,19 @@
 # Comandos para desplegar Orbit en un servidor
 
-Esta guía usa **solo** `docker-compose.prod.yml`. No se combina con el Compose local. Esta variante publica los puertos 3000 (app), 8080 (API) y 9000 (S3), sin Caddy ni certificados TLS. **No envíes credenciales reales por HTTP público**: antes de abrirlo a usuarios, configura HTTPS en un proxy externo o restringe acceso con firewall/VPN. Web Push fuera de localhost requiere HTTPS.
+Esta guía usa **solo** `docker-compose.prod.yml`, con `cloudflared` instalado como servicio del **host**. No lo combines con el Compose local. Los puertos 3000, 8080 y 9000 se publican únicamente en `127.0.0.1`; los navegadores acceden por los subdominios HTTPS del túnel. No abras esos puertos en el firewall público ni apuntes registros DNS directamente al servidor.
 
 ## 1. Preparar el servidor (una vez)
 
-Requisitos: Linux, Docker Engine con `docker compose`, OpenSSL y un usuario no root con acceso a Docker. Decide primero qué puertos abrirá el firewall; nunca publiques 9001, 7474 ni 7687. Protege con TLS externo o VPN los puertos publicados por Compose.
+Requisitos: Linux, Docker Engine con `docker compose`, OpenSSL, `cloudflared` conectado al túnel existente y un usuario no root con acceso a Docker. Cloudflare Tunnel necesita salida hacia su red; no necesita abrir entrada para la app. Mantén 3000, 8080, 9000, 9001, 7474 y 7687 cerrados desde Internet.
 
-Configura `APP_ORIGIN` como origen exacto que abre el navegador (sin barra final) y `RUSTFS_PUBLIC_ENDPOINT` como URL del API S3 accesible desde ese navegador. En acceso directo serían `http://tu-servidor:3000` y `http://tu-servidor:9000`; con un proxy TLS externo usa sus URL `https://` y conserva el host/ruta S3 para validar firmas.
+En el túnel existente, comprueba estas **dos rutas de aplicación publicada**:
+
+| Hostname público | Servicio local en el host |
+|---|---|
+| `orbit.labtorres.me` | `http://127.0.0.1:3000` |
+| `media.orbit.labtorres.me` | `http://127.0.0.1:9000` |
+
+El frontend reenvía `/api/*` y `/ws/*` al backend dentro de Compose: no publiques un tercer hostname para 8080. En la ruta de medios no sobreescribas `HTTP Host Header`, ni reescribas la ruta o los parámetros de consulta; la firma S3 depende de ellos. Activa WebSockets en Cloudflare y crea una regla de caché **Bypass cache** para `media.orbit.labtorres.me` para que una respuesta de una URL firmada no sobreviva a su caducidad. El backend también marca las imágenes privadas `Cache-Control: private, no-store`.
 
 ```bash
 git clone <URL_DEL_REPOSITORIO> orbit
@@ -17,7 +24,7 @@ sed -i "s/^APP_UID=.*/APP_UID=$(id -u)/; s/^APP_GID=.*/APP_GID=$(id -g)/" .env
 nano .env
 ```
 
-En `.env`, completa `APP_ORIGIN`, `RUSTFS_PUBLIC_ENDPOINT`, `NEO4J_PASSWORD`, `RUSTFS_ACCESS_KEY`, `RUSTFS_SECRET_KEY` y `VAPID_SUBJECT=mailto:tu-correo@tu-dominio`. Usa secretos únicos y fuertes; deja las dos claves VAPID en blanco hasta ejecutar el generador. `APP_UID` y `APP_GID` deben ser los del propietario de los archivos de claves, no `0`.
+En `.env`, deja `APP_ORIGIN=https://orbit.labtorres.me` y `RUSTFS_PUBLIC_ENDPOINT=https://media.orbit.labtorres.me`, **sin barra final**. Completa `NEO4J_PASSWORD`, `RUSTFS_ACCESS_KEY`, `RUSTFS_SECRET_KEY` y `VAPID_SUBJECT=mailto:tu-correo@tu-dominio`. Usa secretos únicos y fuertes; deja las dos claves VAPID en blanco hasta ejecutar el generador. `APP_UID` y `APP_GID` deben ser los del propietario de los archivos de claves, no `0`.
 
 Puedes generar valores aptos para `.env` con `openssl rand -hex 32` (una ejecución distinta para cada contraseña). No reutilices los valores de desarrollo ni publiques este archivo.
 
@@ -46,13 +53,15 @@ docker compose -f docker-compose.prod.yml logs --tail=100 backend rustfs
 curl -fsS -o /dev/null -w 'Orbit: %{http_code}\n' http://localhost:3000/login
 curl -fsS -o /dev/null -w 'Media: %{http_code}\n' \
   http://localhost:9000/health
+curl -fsS -o /dev/null -w 'Orbit HTTPS: %{http_code}\n' https://orbit.labtorres.me/login
+curl -fsS -o /dev/null -w 'Media HTTPS: %{http_code}\n' https://media.orbit.labtorres.me/health
 ```
 
-Se espera HTTP 200 en ambas comprobaciones y servicios sanos. Estas pruebas locales no demuestran TLS ni seguridad para acceso público. En la primera base vacía **no** se crean cuentas de demostración: registra usuarios desde Orbit.
+Se espera HTTP 200 en las cuatro comprobaciones y servicios sanos. Verifica además que `docker compose -f docker-compose.prod.yml ps` muestra `127.0.0.1:3000`, `127.0.0.1:8080` y `127.0.0.1:9000`, nunca `0.0.0.0` para esos puertos. En la primera base vacía **no** se crean cuentas de demostración: registra usuarios desde Orbit.
 
 El proyecto Compose se llama `orbit-prod` y crea volúmenes nuevos. Las imágenes previas de MinIO **no** se migran, por decisión de producto; referencias antiguas pueden quedar sin imagen. No se borra automáticamente su volumen.
 
-Comprueba también desde dos navegadores que funcionan login, una imagen, mensajes WebSocket y presencia. Los avatares se sirven desde `/<bucket>/avatars/` y las imágenes de posts mediante URL firmada de corta duración; la API S3 en 9000 está publicada, aunque las escrituras requieren credenciales. La consola RustFS y Neo4j no se publican.
+Comprueba también desde dos navegadores en `https://orbit.labtorres.me` que funcionan login, recarga de sesión, una imagen y mensajes WebSocket. La URL firmada de un post debe empezar con `https://media.orbit.labtorres.me/`, abrirse antes de 60 segundos y rechazarse después; en la respuesta, comprueba `Cache-Control: private, no-store` y que Cloudflare no la sirva desde caché. Los avatares se sirven desde `/<bucket>/avatars/`. La consola RustFS y Neo4j no se publican.
 
 ## 3. Operación habitual
 
@@ -88,8 +97,8 @@ Guarda además `.env` y `secrets/` en un respaldo **cifrado y fuera del servidor
 
 ## Decisiones de seguridad
 
-- Esta variante publica 3000/8080/9000. Restringe esos puertos hasta contar con TLS externo o VPN.
+- 3000/8080/9000 solo escuchan en loopback para `cloudflared`; el firewall no debe permitir acceso directo a ellos.
 - `APP_SEED_ENABLED=false` impide que una base vacía reciba las credenciales de demostración conocidas.
 - La clave privada JWT está fuera de la imagen y montada en solo lectura. El backend corre con el UID/GID que puede leer el archivo `chmod 600`.
-- Si agregas un proxy TLS externo para medios, debe conservar el host y la ruta firmados de S3.
+- Cloudflare termina HTTPS; la ruta de medios debe conservar host, ruta y query firmados y omitir caché de imágenes privadas.
 - Mantén **una sola réplica** del backend: las conexiones de WebSocket y presencia se almacenan en memoria. Escalarlo requiere un canal compartido antes de añadir réplicas.

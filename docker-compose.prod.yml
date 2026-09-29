@@ -1,6 +1,6 @@
 # Standalone production stack. Never combine with docker-compose.yml:
-# This variant publishes 3000/8080/9000 directly; provide external TLS before
-# accepting real credentials or enabling browser Push on a public server.
+# cloudflared runs on the host. Only loopback ports are published; public
+# HTTPS hostnames route through the tunnel, not directly to the origin.
 # Required settings live in .env (start from .env.prod.example).
 name: orbit-prod
 
@@ -42,7 +42,7 @@ services:
     volumes:
       - rustfs_data:/data
     ports:
-      - "9000:9000"
+      - "127.0.0.1:9000:9000"
     depends_on:
       rustfs-permissions:
         condition: service_completed_successfully
@@ -82,7 +82,7 @@ services:
     # the signing key world-readable just to satisfy a container UID mismatch.
     user: "${APP_UID:?Set APP_UID in .env}:${APP_GID:?Set APP_GID in .env}"
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     volumes:
       - ./secrets:/deployments/config:ro
     environment:
@@ -125,7 +125,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "3000:80"
+      - "127.0.0.1:3000:80"
     depends_on:
       backend:
         condition: service_healthy

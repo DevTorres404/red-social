@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { authApi, presenceApi, tokenStore } from '../lib/api';
 import { presenceSessionId } from '../lib/presenceSession';
-import { disablePush, rebindExistingPush } from '../lib/push';
+import { disablePush, restorePushForUser } from '../lib/push';
 
 const AuthContext = createContext(null);
 
@@ -31,6 +31,7 @@ export function AuthProvider({ children }) {
         if (currentToken) {
           try {
             const profile = await authApi.me();
+            try { await restorePushForUser(profile.id); } catch { /* Push cannot invalidate login. */ }
             setUser(profile);
             setToken(currentToken);
           } catch {
@@ -49,7 +50,7 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (credentials) => {
     const data = await authApi.login(credentials);
-    await rebindExistingPush();
+    try { await restorePushForUser(data.user.id); } catch { /* Push cannot invalidate login. */ }
     setToken(data.token);
     setUser(data.user);
     return data;
@@ -57,7 +58,7 @@ export function AuthProvider({ children }) {
 
   const register = useCallback(async (formData) => {
     const data = await authApi.register(formData);
-    await rebindExistingPush();
+    try { await restorePushForUser(data.user.id); } catch { /* Push cannot invalidate registration. */ }
     setToken(data.token);
     setUser(data.user);
     return data;
@@ -67,12 +68,12 @@ export function AuthProvider({ children }) {
     if (tokenStore.get()) {
       try { await presenceApi.disconnect(presenceSessionId); } catch { /* lease will expire */ }
     }
-    try { await disablePush(); } catch { /* logout must remain available offline */ }
+    try { await disablePush(user?.id, { remember: false }); } catch { /* logout must remain available offline */ }
     try { await authApi.logout(); } catch { /* best effort */ }
     tokenStore.clear();
     setToken(null);
     setUser(null);
-  }, []);
+  }, [user]);
 
   const updateUser = useCallback((updated) => {
     setUser(current => current ? { ...current, ...updated } : current);

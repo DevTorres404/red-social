@@ -4,6 +4,13 @@ $ErrorActionPreference = 'Stop'
 $suffix = [guid]::NewGuid().ToString('N').Substring(0, 8)
 $prefix = "ptoken_$suffix"
 $createdIds = [System.Collections.Generic.List[string]]::new()
+$settings = @{}
+Get-Content (Join-Path $PSScriptRoot '..\.env') | ForEach-Object {
+    if ($_ -match '^([^#=]+)=(.*)$') { $settings[$matches[1]] = $matches[2].Trim('"', "'") }
+}
+$neo4jUser = if ($settings.NEO4J_USER) { $settings.NEO4J_USER } else { 'neo4j' }
+$neo4jPassword = if ($settings.NEO4J_PASSWORD) { $settings.NEO4J_PASSWORD } else { 'changeme' }
+$neo4jCredential = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("${neo4jUser}:$neo4jPassword"))
 
 function Invoke-Api($method, $path, $token = $null, $payload = $null, $cookieHeader = $null) {
     $headers = @{}
@@ -68,8 +75,7 @@ try {
     $accessToken = $login.Data.token
     $rtCookie = ExtractCookie $login.Cookies 'rt'
     Check ($rtCookie -ne $null -and $rtCookie.Length -gt 10) 'refresh token cookie (rt) present on login'
-    Write-Host "   Access token: $($accessToken.Substring(0,20))..." -ForegroundColor Gray
-    Write-Host "   Refresh cookie: $($rtCookie.Substring(0,20))..." -ForegroundColor Gray
+    Check (@($login.Cookies | Where-Object { $_ -match '(?i)(^|;)\s*Path=/api/auth(?:;|$)' -and $_ -notmatch '(?i)Max-Age=0' }).Count -eq 1) 'browser sends refresh cookie to refresh and logout'
 
     # 3. Verify access token works (GET /me)
     Write-Host "3. Access token works for /me..." -ForegroundColor Yellow
@@ -85,8 +91,6 @@ try {
     $newRtCookie1 = ExtractCookie $refresh1.Cookies 'rt'
     Check ($newAccessToken1 -ne $accessToken) 'new access token differs from old'
     Check ($newRtCookie1 -ne $null -and $newRtCookie1 -ne $rtCookie) 'new refresh cookie differs from old (rotation)'
-    Write-Host "   New access token: $($newAccessToken1.Substring(0,20))..." -ForegroundColor Gray
-    Write-Host "   New refresh cookie: $($newRtCookie1.Substring(0,20))..." -ForegroundColor Gray
 
     # 5. Old refresh token should be rejected (rotation)
     Write-Host "5. Old refresh token rejected..." -ForegroundColor Yellow
@@ -124,9 +128,8 @@ try {
 
     # 10. Verify refresh token revoked in Neo4j (via Cypher)
     Write-Host "10. Verify refresh token revoked in Neo4j..." -ForegroundColor Yellow
-    $cred = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('neo4j:redsocial123'))
     $body = @{ statements = @(@{ statement = 'MATCH (rt:RefreshToken) WHERE rt.revokedAt IS NOT NULL RETURN count(rt) AS revoked'; parameters = @{} }) } | ConvertTo-Json -Depth 10 -Compress
-    $result = Invoke-RestMethod -Uri 'http://localhost:7474/db/neo4j/tx/commit' -Method POST -ContentType 'application/json' -Headers @{ Authorization = "Basic $cred" } -Body $body
+    $result = Invoke-RestMethod -Uri 'http://localhost:7474/db/neo4j/tx/commit' -Method POST -ContentType 'application/json' -Headers @{ Authorization = "Basic $neo4jCredential" } -Body $body
     $revokedCount = $result.results[0].data[0].row[0]
     Check ($revokedCount -ge 1) "at least 1 refresh token revoked in Neo4j (count=$revokedCount)"
 
@@ -150,9 +153,12 @@ FOREACH (post IN posts | DETACH DELETE post)
 FOREACH (subscription IN subscriptions | DETACH DELETE subscription)
 FOREACH (user IN users | DETACH DELETE user)
 "@
-        $body = @{ statements = @(@{ statement = $cleanup; parameters = @{} }) } | ConvertTo-Json -Depth 10 -Compress
-        $cred = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('neo4j:redsocial123'))
-        Invoke-RestMethod -Uri 'http://localhost:7474/db/neo4j/tx/commit' -Method POST -ContentType 'application/json' -Headers @{ Authorization = "Basic $cred" } -Body $body | Out-Null
+        $cleanupTokens = "MATCH (rt:RefreshToken) WHERE rt.userId IN [$idsJson] DELETE rt"
+        $body = @{ statements = @(
+            @{ statement = $cleanupTokens; parameters = @{} },
+            @{ statement = $cleanup; parameters = @{} }
+        ) } | ConvertTo-Json -Depth 10 -Compress
+        Invoke-RestMethod -Uri 'http://localhost:7474/db/neo4j/tx/commit' -Method POST -ContentType 'application/json' -Headers @{ Authorization = "Basic $neo4jCredential" } -Body $body | Out-Null
         Write-Host "PASS exact-ID test data cleanup"
     }
 }

@@ -28,7 +28,7 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
  *   - HttpOnly: prevents XSS theft
  *   - Secure: only sent over HTTPS (required for production)
  *   - SameSite=Strict: CSRF protection
- *   - Path=/api/auth/refresh: only sent to the refresh endpoint
+ *   - Path=/api/auth: sent to refresh and logout, not to unrelated API routes
  *   - Max-Age: 30 days (matches refresh token TTL)
  */
 @Path("/api/auth")
@@ -48,7 +48,8 @@ public class AuthResource {
 
     private static final String REFRESH_COOKIE_NAME = "rt";
     private static final int REFRESH_COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30 days
-    private static final String REFRESH_COOKIE_PATH = "/api/auth/refresh";
+    private static final String REFRESH_COOKIE_PATH = "/api/auth";
+    private static final String LEGACY_REFRESH_COOKIE_PATH = "/api/auth/refresh";
 
     private NewCookie buildRefreshCookie(String token, boolean isLogout) {
         return new NewCookie.Builder(REFRESH_COOKIE_NAME)
@@ -58,6 +59,18 @@ public class AuthResource {
                 .secure(true) // In dev, localhost is treated as secure context
                 .sameSite(NewCookie.SameSite.STRICT)
                 .maxAge(isLogout ? 0 : REFRESH_COOKIE_MAX_AGE)
+                .build();
+    }
+
+    // Clear cookies issued before logout was included in the cookie path.
+    private NewCookie clearLegacyRefreshCookie() {
+        return new NewCookie.Builder(REFRESH_COOKIE_NAME)
+                .value("")
+                .path(LEGACY_REFRESH_COOKIE_PATH)
+                .httpOnly(true)
+                .secure(true)
+                .sameSite(NewCookie.SameSite.STRICT)
+                .maxAge(0)
                 .build();
     }
 
@@ -75,7 +88,7 @@ public class AuthResource {
         AuthResult result = authService.register(request);
         return Response.status(Response.Status.CREATED)
                 .entity(result.response())
-                .cookie(buildRefreshCookie(result.rawRefreshToken(), false))
+                .cookie(buildRefreshCookie(result.rawRefreshToken(), false), clearLegacyRefreshCookie())
                 .build();
     }
 
@@ -91,7 +104,7 @@ public class AuthResource {
     public Response login(@Valid LoginRequest request) {
         AuthResult result = authService.login(request);
         return Response.ok(result.response())
-                .cookie(buildRefreshCookie(result.rawRefreshToken(), false))
+                .cookie(buildRefreshCookie(result.rawRefreshToken(), false), clearLegacyRefreshCookie())
                 .build();
     }
 
@@ -108,7 +121,7 @@ public class AuthResource {
     public Response refresh(@jakarta.ws.rs.CookieParam("rt") String refreshToken) {
         AuthResult result = authService.refresh(refreshToken);
         return Response.ok(result.response())
-                .cookie(buildRefreshCookie(result.rawRefreshToken(), false))
+                .cookie(buildRefreshCookie(result.rawRefreshToken(), false), clearLegacyRefreshCookie())
                 .build();
     }
 
@@ -124,7 +137,7 @@ public class AuthResource {
     public Response logout(@jakarta.ws.rs.CookieParam("rt") String refreshToken) {
         authService.logout(refreshToken);
         return Response.ok()
-                .cookie(buildRefreshCookie("", true))
+                .cookie(buildRefreshCookie("", true), clearLegacyRefreshCookie())
                 .build();
     }
 

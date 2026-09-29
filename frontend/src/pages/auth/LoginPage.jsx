@@ -64,6 +64,7 @@ export default function LoginPage() {
             <img src="/logo.png" alt="" />
           </div>
 
+          <span className="auth-card-kicker" aria-hidden="true">TU ESPACIO EN ORBIT</span>
           <h1 className="auth-title">¡Bienvenido de vuelta!</h1>
           <p className="auth-subtitle">
             Sintoniza tu órbita. Ingresa para continuar.

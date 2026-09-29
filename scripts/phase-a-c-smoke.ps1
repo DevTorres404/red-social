@@ -180,6 +180,7 @@ try {
     Assert-Status (Invoke-Api DELETE "/api/posts/$postId/like" $aToken) 204 'unlike post'
     $unliked = Invoke-Api GET "/api/posts/$postId" $aToken
     Assert-True ($unliked.Data.likeCount -eq 0) 'unlike count consistent'
+    Assert-Status (Invoke-Api POST '/api/posts/missing-post/like' $aToken) 404 'missing post like'
     Assert-Status (Invoke-Api DELETE '/api/posts/missing-post/like' $aToken) 404 'missing post unlike'
     Assert-Status (Invoke-Api GET '/api/posts/missing-post/comments' $aToken) 404 'missing post comments'
     $comment = Invoke-Api POST "/api/posts/$postId/comments" $aToken @{ text = 'phase A-C comment' }

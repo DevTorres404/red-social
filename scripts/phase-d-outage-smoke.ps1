@@ -5,7 +5,7 @@ $name = 'pd_outage_' + [guid]::NewGuid().ToString('N').Substring(0, 8)
 $image = Join-Path $env:TEMP "$name.png"
 $userId = $null
 $token = $null
-$minioStopped = $false
+$rustfsStopped = $false
 
 function Check($condition, $label) {
     if (-not $condition) { throw "FAIL $label" }
@@ -25,31 +25,31 @@ try {
     $userId = $registration.user.id
     $token = $registration.token
 
-    $minioStopped = $true
-    & docker compose stop minio | Out-Host
-    if ($LASTEXITCODE -ne 0) { throw 'Could not stop MinIO for outage test' }
+    $rustfsStopped = $true
+    & docker compose stop rustfs | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw 'Could not stop RustFS for outage test' }
 
     $raw = @(& curl.exe --silent --show-error --max-time 90 --write-out "`n%{http_code}" --request POST `
         --header "Authorization: Bearer $token" --form 'content=outage test' `
         --form "image=@$image;type=image/png" "$BaseUrl/api/posts/with-image")
     $status = [int]$raw[-1]
-    Check ($status -eq 503) 'upload returns 503 while MinIO is unavailable'
+    Check ($status -eq 503) 'upload returns 503 while RustFS is unavailable'
 
     $posts = @(Invoke-RestMethod -Uri "$BaseUrl/api/users/$userId/posts" -Headers @{ Authorization = "Bearer $token" } | Where-Object { $_ -and $_.id })
     Check ($posts.Count -eq 0) 'outage creates no Neo4j post'
     Write-Output 'PHASE_D_OUTAGE_SMOKE_PASS'
 } finally {
-    if ($minioStopped) {
-        & docker compose start minio | Out-Host
-        if ($LASTEXITCODE -ne 0) { throw 'MinIO restart failed after outage test' }
+    if ($rustfsStopped) {
+        & docker compose start rustfs | Out-Host
+        if ($LASTEXITCODE -ne 0) { throw 'RustFS restart failed after outage test' }
         $ready = $false
         for ($attempt = 0; $attempt -lt 30; $attempt++) {
             try {
-                $health = Invoke-WebRequest -Uri 'http://localhost:9000/minio/health/live' -TimeoutSec 3
+                $health = Invoke-WebRequest -Uri 'http://localhost:9000/health' -TimeoutSec 3
                 if ($health.StatusCode -eq 200) { $ready = $true; break }
             } catch { Start-Sleep -Seconds 1 }
         }
-        Check $ready 'MinIO restored after outage test'
+        Check $ready 'RustFS restored after outage test'
     }
     if ($userId) {
         if ($token) {

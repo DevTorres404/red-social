@@ -268,6 +268,9 @@ public class PostRepository {
                         """,
                         Map.of("userId", userId, "postId", postId)
                 );
+                if (!result.hasNext()) {
+                    throw new NotFoundException("Post not found: " + postId);
+                }
                 var row = result.single();
                 if (row.get("existing").asLong() == 0) {
                     throw new NotFoundException("Post not found: " + postId);
@@ -295,6 +298,9 @@ public class PostRepository {
                         """,
                         Map.of("userId", userId, "postId", postId)
                 );
+                if (!result.hasNext()) {
+                    throw new NotFoundException("Post not found: " + postId);
+                }
                 var row = result.single();
                 if (row.get("existing").asLong() == 0) {
                     throw new NotFoundException("Post not found: " + postId);

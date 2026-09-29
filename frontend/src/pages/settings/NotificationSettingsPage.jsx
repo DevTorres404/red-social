@@ -1,30 +1,50 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Bell, BellOff, AlertCircle, AlertTriangle, Check } from 'lucide-react';
-import { currentSubscription, disablePush, enablePush, pushSupported } from '../../lib/push';
+import { currentSubscription, disablePush, enablePush, pushSupported, restorePushForUser } from '../../lib/push';
+import { getPushPreference } from '../../lib/pushPreference';
+import { useAuth } from '../../context/AuthContext';
 import './NotificationSettingsPage.css';
 
 export default function NotificationSettingsPage() {
+  const { user } = useAuth();
   const [enabled, setEnabled] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [checking, setChecking] = useState(true);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
-    currentSubscription().then((subscription) => setEnabled(Boolean(subscription)))
-      .catch(() => setMessage('No se pudo consultar la suscripción del navegador.'));
-  }, []);
+    let active = true;
+    const check = async () => {
+      await restorePushForUser(user.id);
+      const subscription = await currentSubscription();
+      if (!active) return;
+      const activePush = pushSupported() && Notification.permission === 'granted' && Boolean(subscription);
+      setEnabled(activePush);
+      if (!activePush && pushSupported() && getPushPreference(user.id) === true && Notification.permission === 'granted') {
+        setMessage('No se pudo restablecer la suscripción push. Volvé a intentarlo.');
+      }
+    };
+    check().catch(() => {
+      if (active) setMessage('No se pudo consultar la suscripción del navegador.');
+    }).finally(() => { if (active) setChecking(false); });
+    return () => { active = false; };
+  }, [user.id]);
 
   const toggle = async () => {
-    if (busy || !pushSupported()) return;
+    if (busy || checking || !pushSupported()) return;
     setBusy(true);
     setMessage('');
     try {
-      if (enabled) await disablePush();
-      else await enablePush();
-      setEnabled(!enabled);
+      if (enabled) await disablePush(user.id);
+      else await enablePush(user.id);
     } catch (error) {
       setMessage(error.message);
     } finally {
+      try {
+        const subscription = await currentSubscription();
+        setEnabled(pushSupported() && Notification.permission === 'granted' && Boolean(subscription));
+      } catch { /* The error above remains visible. */ }
       setBusy(false);
     }
   };
@@ -74,10 +94,10 @@ export default function NotificationSettingsPage() {
             type="button"
             role="switch"
             aria-checked={enabled}
-            className={`notif-toggle${enabled ? ' active' : ''}${busy || !pushSupported() ? ' disabled' : ''}`}
+            className={`notif-toggle${enabled ? ' active' : ''}${busy || checking || !pushSupported() ? ' disabled' : ''}`}
             onClick={toggle}
-            disabled={busy || !pushSupported()}
-            aria-label="Activar notificaciones push"
+            disabled={busy || checking || !pushSupported()}
+            aria-label={enabled ? 'Desactivar notificaciones push' : 'Activar notificaciones push'}
           >
             <div className="notif-knob" />
           </button>

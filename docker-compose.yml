@@ -25,49 +25,56 @@ services:
       retries: 12
       start_period: 40s
 
-  # ── Object Storage (S3-compatible) ────────────────────────────────────────────
-  minio:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
-    container_name: red-social-minio
-    restart: unless-stopped
-    ports:
-      - "9000:9000"   # S3 API
-      - "9001:9001"   # MinIO Console UI
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
-    command: server /data --console-address ":9001"
+
+  rustfs-permissions:
+    image: busybox:1.37
+    user: root
+    entrypoint: ["sh", "-ec", "chown 10001:10001 /data"]
     volumes:
-      - minio_data:/data
+      - rustfs_data:/data
+
+  rustfs:
+    image: rustfs/rustfs@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff
+    restart: unless-stopped
+    depends_on:
+      rustfs-permissions:
+        condition: service_completed_successfully
+    ports:
+      - "9000:9000" # S3 API
+      - "9001:9001" # local console
+    environment:
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:?Set RUSTFS_ACCESS_KEY in .env}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:?Set RUSTFS_SECRET_KEY in .env}
+    volumes:
+      - rustfs_data:/data
     healthcheck:
-      # This release tag still ships curl (verified: 8.11.0 musl). `latest` had
-      # drifted to a curl-less build, which is what broke this probe — pinning
-      # the tag is the fix. -sf makes curl exit non-zero on both HTTP errors
-      # (22) and connection failures (7), so the gate actually fails.
-      test: ["CMD-SHELL", "curl -sf -o /dev/null http://localhost:9000/minio/health/live"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9000/health >/dev/null"]
       interval: 10s
       timeout: 10s
       retries: 12
-      start_period: 20s
+      start_period: 40s
 
-  # ── MinIO bucket init (one-shot) ───────────────────────────────────────────────
-  minio-init:
-    # Pinned by digest: this environment cannot enumerate Docker Hub tags, so
-    # the digest is the only immutable reference we can actually verify. The
-    # bundled client is `mc version RELEASE.2025-08-13T08-35-41Z`.
-    image: minio/mc@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
-    container_name: red-social-minio-init
+  # Bucket private by default; only avatar reads are anonymous.
+  rustfs-init:
+    image: pgsty/mc:latest
+    restart: "no"
+    environment:
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:?Set RUSTFS_ACCESS_KEY in .env}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:?Set RUSTFS_SECRET_KEY in .env}
+      RUSTFS_BUCKET: ${RUSTFS_BUCKET:-red-social}
     depends_on:
-      minio:
+      rustfs:
         condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-        mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin};
-        mc mb --ignore-existing local/${MINIO_BUCKET:-red-social};
-        mc anonymous set none local/${MINIO_BUCKET:-red-social};
-        mc anonymous set download local/${MINIO_BUCKET:-red-social}/avatars;
-        exit 0;
-      "
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        mc alias set local http://rustfs:9000 "$$RUSTFS_ACCESS_KEY" "$$RUSTFS_SECRET_KEY"
+        mc mb --ignore-existing "local/$$RUSTFS_BUCKET"
+        mc anonymous set none "local/$$RUSTFS_BUCKET"
+        mc anonymous set download "local/$$RUSTFS_BUCKET/avatars"
 
   # ── Quarkus Backend ───────────────────────────────────────────────────────────
   backend:
@@ -87,16 +94,16 @@ services:
       QUARKUS_NEO4J_URI: bolt://neo4j:7687
       QUARKUS_NEO4J_AUTHENTICATION_USERNAME: ${NEO4J_USER:-neo4j}
       QUARKUS_NEO4J_AUTHENTICATION_PASSWORD: ${NEO4J_PASSWORD:-changeme}
-      # MinIO / S3
-      QUARKUS_S3_ENDPOINT_OVERRIDE: http://minio:9000
+      # RustFS / S3
+      QUARKUS_S3_ENDPOINT_OVERRIDE: http://rustfs:9000
       QUARKUS_S3_AWS_REGION: ${AWS_REGION:-us-east-1}
       QUARKUS_S3_AWS_CREDENTIALS_TYPE: static
       # The Quarkus static provider wins over the AWS SDK env chain, so these
-      # come from MINIO_ROOT_* — not from AWS_ACCESS_KEY_ID.
-      QUARKUS_S3_AWS_CREDENTIALS_STATIC_PROVIDER_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
-      QUARKUS_S3_AWS_CREDENTIALS_STATIC_PROVIDER_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
-      APP_MINIO_BUCKET: ${MINIO_BUCKET:-red-social}
-      APP_MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-http://localhost:9000}
+      # come from RUSTFS_* — not from AWS_ACCESS_KEY_ID.
+      QUARKUS_S3_AWS_CREDENTIALS_STATIC_PROVIDER_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY:?Set RUSTFS_ACCESS_KEY in .env}
+      QUARKUS_S3_AWS_CREDENTIALS_STATIC_PROVIDER_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY:?Set RUSTFS_SECRET_KEY in .env}
+      APP_S3_BUCKET: ${RUSTFS_BUCKET:-red-social}
+      APP_S3_PUBLIC_ENDPOINT: ${RUSTFS_PUBLIC_ENDPOINT:-http://localhost:9000}
       APP_WEBSOCKET_ALLOWED_ORIGIN: ${WEBSOCKET_ALLOWED_ORIGIN:-http://localhost:3000}
       # JWT — resolved from the read-only bind mount above.
       # Run ./scripts/generate-jwt-keys.sh before starting the stack.
@@ -110,7 +117,7 @@ services:
     depends_on:
       neo4j:
         condition: service_healthy
-      minio-init:
+      rustfs-init:
         condition: service_completed_successfully
     healthcheck:
       # eclipse-temurin:21-jre-alpine has no curl, but busybox provides wget.
@@ -140,4 +147,4 @@ services:
 volumes:
   neo4j_data:
   neo4j_logs:
-  minio_data:
+  rustfs_data:

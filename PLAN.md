@@ -18,6 +18,8 @@
 
 ### Estado observado tras la implementación de A–G (25-09-2026)
 
+> Este apartado conserva evidencia histórica tomada con MinIO. Desde el 29-09-2026, el almacenamiento activo es RustFS; las imágenes del volumen anterior no se migran por decisión del usuario. La prueba automatizada D se repitió contra RustFS (18 comprobaciones PASS); la demostración visual desde un segundo navegador sigue pendiente.
+
 | Área | Estado honesto | Brecha principal |
 |---|---|---|
 | Infraestructura, autenticación y perfiles | Verificado en el entorno actual: registro, login por email, rechazo de credenciales, identidad JWT, autorización de perfil y restauración de sesión en navegador. Login por nombre de usuario: código y pruebas locales presentes | Falta probar el login por nombre de usuario contra los servicios reconstruidos y el arranque con volúmenes nuevos. La estrategia de token aún no es apta para producción: hoy se guarda en `localStorage`, el refresh requiere token vigente y el logout solo lo quita del cliente. |
@@ -51,13 +53,13 @@ No modificar el estado de una fase a “terminada” hasta cumplir su puerta de 
 | Quarkus REST | Autenticación, perfiles, publicaciones, feed, archivos y consultas convencionales | Polling de mensajes para aparentar tiempo real. |
 | Quarkus WebSocket | Entrega de mensajes y, en P1, eventos efímeros de presencia | Guardar historial solo en memoria. |
 | Neo4j/Cypher | Usuarios, relaciones, posts, mensajes, notificaciones y recorridos de grafo | Almacenar bytes de archivos ni usarlo solo como tabla de nodos. |
-| MinIO/S3 | Bytes multimedia privados, identificados por clave | Decidir quién tiene permiso para ver un post. |
+| RustFS/S3 | Bytes multimedia privados, identificados por clave | Decidir quién tiene permiso para ver un post. |
 | Web Push | Notificación fuera de la aplicación mediante Service Worker y VAPID | Reemplazar chat WebSocket o mostrar solo una alerta React. |
 | Docker Compose | Levantar y conectar componentes de forma reproducible | Ocultar pasos manuales no documentados. |
 
 **Convenciones de datos existentes a respetar o migrar explícitamente:** el código actual usa `:PUBLICO` para autor-publicación y `:LE_GUSTA` para la reacción mínima. Si se cambia el nombre, migrar consultas, seeder, pruebas y documentación juntos; no mezclar nombres en una misma entrega.
 
-**Arquitectura verificable:** mantener un diagrama que muestre navegador → REST/WebSocket → Quarkus → Neo4j/MinIO, y Quarkus → servicio push → navegador. La consigna pide una aplicación distribuida por componentes; no obliga a varias réplicas de backend. Si se afirma soporte multirréplica, probar comunicación entre instancias y no depender de sesiones solo en memoria.
+**Arquitectura verificable:** mantener un diagrama que muestre navegador → REST/WebSocket → Quarkus → Neo4j/RustFS, y Quarkus → servicio push → navegador. La consigna pide una aplicación distribuida por componentes; no obliga a varias réplicas de backend. Si se afirma soporte multirréplica, probar comunicación entre instancias y no depender de sesiones solo en memoria.
 
 ## 3. Ruta crítica de implementación
 
@@ -153,14 +155,14 @@ El 25-09-2026 se ejecutaron `mvn -B -q clean test`, `mvn -B -q -DskipTests packa
 
 ### Fase D — Multimedia S3
 
-  - [x] Elegir **un** flujo de subida coherente: backend recibe multipart y lo guarda en MinIO, o cliente usa URL prefirmada con confirmación segura. No mezclar ambos a medias.
+  - [x] Elegir **un** flujo de subida coherente: backend recibe multipart y lo guarda en RustFS, o cliente usa URL prefirmada con confirmación segura. No mezclar ambos a medias.
   - [x] Validar tamaño, tipo real de archivo, extensión aceptada, permisos, nombre/key no confiable y límites de cantidad; no aceptar una URL arbitraria del cliente como prueba de subida S3.
   - [x] Neo4j almacena key/metadata necesarias, nunca bytes ni credenciales. El acceso de lectura se autoriza antes de generar una URL prefirmada de vida corta.
   - [x] Resolver fallo entre S3 y Neo4j: si se sube pero no se crea post, limpiar o registrar para limpieza; si se elimina un post, definir política de borrado del objeto.
   - [x] Interfaz: selector, vista previa, progreso, error/reintento y presentación después de recargar.
-  - [x] Probar archivo inválido, demasiado grande, usuario no autorizado, URL expirada, MinIO no disponible y ausencia de multimedia.
+  - [x] Probar archivo inválido, demasiado grande, usuario no autorizado, URL expirada, almacenamiento no disponible y ausencia de multimedia.
 
-  **Salida:** crear post con imagen desde la UI, ver el objeto en MinIO y visualizarlo desde otro cliente; el post en Neo4j solo contiene la referencia.
+  **Salida:** crear post con imagen desde la UI, ver el objeto en RustFS y visualizarlo desde otro cliente; el post en Neo4j solo contiene la referencia.
 
   **Evidencia actual D:** `scripts/phase-d-smoke.ps1` crea una imagen real, comprueba metadata y URL firmada, rechazo anónimo, expiración de la URL, posts sin imagen y eliminación del objeto. `scripts/phase-d-outage-smoke.ps1` detiene MinIO temporalmente, verifica `503` sin post huérfano y restaura el servicio. En navegador se publicó una imagen y siguió visible tras recargar; esa publicación de prueba se eliminó después. El bucket se configura privado. La puerta de salida permanece abierta hasta verificar un segundo navegador independiente.
 
@@ -276,7 +278,7 @@ Automatizar primero las reglas de negocio y autorización; mantener un guion man
 
 - [ ] Ejecutar pruebas de backend y frontend; registrar comando, fecha, resultado y fallos pendientes. Si no hay tests, decirlo explícitamente.
 - [ ] Compilar backend **desde limpio**, compilar frontend y construir imágenes; no usar `-DskipTests` como evidencia de que se probaron casos.
-- [ ] Levantar Compose desde configuración documentada; comprobar salud y flujo navegador → HTTP/WebSocket → backend → Neo4j/MinIO → interfaz actualizada.
+- [ ] Levantar Compose desde configuración documentada; comprobar salud y flujo navegador → HTTP/WebSocket → backend → Neo4j/RustFS → interfaz actualizada.
 - [ ] Verificar que claves/archivos secretos no aparecen en Git ni en artefactos de imagen.
 - [ ] Comparar endpoints, nombres de relaciones y esquema del README/diagrama con el código real.
 
@@ -287,7 +289,7 @@ Automatizar primero las reglas de negocio y autorización; mantener un guion man
 3. [ ] Seguir a otro usuario y observar la relación.
 4. [x] Visualizar el grafo real generado.
 5. [ ] Crear una publicación.
-6. [x] Subir archivo y localizar el objeto en MinIO.
+6. [x] Subir archivo y localizar el objeto en RustFS.
 7. [ ] Mostrar feed personalizado y contrastarlo con un no seguidor.
 8. [ ] Explicar y ejecutar una recomendación basada en el grafo.
 9. [x] Enviar/recibir chat en tiempo real entre dos clientes sin polling.

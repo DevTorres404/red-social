@@ -82,6 +82,7 @@ try {
     Check ($signed.Status -eq 200 -and $signed.Data.url -match 'X-Amz-Signature') 'issue short-lived signed URL'
     $imageResponse = Invoke-WebRequest -Uri $signed.Data.url -SkipHttpErrorCheck -TimeoutSec 15
     Check ($imageResponse.StatusCode -eq 200) 'read private object via signed URL'
+    Check ($imageResponse.Headers['Cache-Control'] -match 'no-store') 'signed post image cannot be cached beyond URL expiry'
     $unsigned = Invoke-WebRequest -Uri "http://localhost:9000/red-social/$key" -SkipHttpErrorCheck -TimeoutSec 15
     Check ($unsigned.StatusCode -eq 403) 'deny anonymous object read'
 
@@ -95,7 +96,7 @@ try {
     Check ((Api DELETE "/api/posts/$postId" $token).Status -eq 204) 'delete image post'
     $postId = $null
     $afterDelete = Invoke-WebRequest -Uri $fresh.Data.url -SkipHttpErrorCheck -TimeoutSec 15
-    Check ($afterDelete.StatusCode -eq 404) 'delete object from MinIO'
+    Check ($afterDelete.StatusCode -eq 404) 'delete object from RustFS'
     Write-Output 'PHASE_D_SMOKE_PASS'
 } finally {
     if ($postId -and $token) { Api DELETE "/api/posts/$postId" $token | Out-Null }

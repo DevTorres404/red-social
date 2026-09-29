@@ -44,7 +44,7 @@ En `.env` deben configurarse secretos reales, no los valores de ejemplo. `RUSTFS
 
 ## Despliegue en servidor
 
-Usa el Compose **autónomo** `docker-compose.prod.yml`, no lo combines con el de desarrollo. Esta variante publica 3000 (app), 8080 (API) y 9000 (S3); Neo4j y la consola RustFS permanecen internos. **No incluye TLS:** antes de introducir credenciales reales en Internet, añade terminación HTTPS externa o limita el acceso mediante firewall/VPN. Web Push fuera de localhost requiere HTTPS. La base nueva arranca sin cuentas de demostración.
+Usa el Compose **autónomo** `docker-compose.prod.yml`, no lo combines con el de desarrollo. Con `cloudflared` instalado en el host, 3000 (app), 8080 (API de diagnóstico) y 9000 (S3) se vinculan **solo a `127.0.0.1`**. El túnel publica `https://orbit.labtorres.me` → `http://127.0.0.1:3000` y `https://media.orbit.labtorres.me` → `http://127.0.0.1:9000`; `/api` y `/ws` pasan por Nginx del frontend, sin tercer subdominio. Neo4j y la consola RustFS permanecen internos. La base nueva arranca sin cuentas de demostración.
 
 Los requisitos, la plantilla `.env.prod.example`, el primer arranque, las verificaciones, actualizaciones y respaldos están en [comando.md](comando.md).
 

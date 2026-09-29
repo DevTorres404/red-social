@@ -36,8 +36,8 @@ public class MediaStorage {
     private static final long MAX_PIXELS = 16_000_000L;
 
     @Inject S3Client s3;
-    @ConfigProperty(name = "app.minio.bucket") String bucket;
-    @ConfigProperty(name = "app.minio.public-endpoint") String publicEndpoint;
+    @ConfigProperty(name = "app.s3.bucket") String bucket;
+    @ConfigProperty(name = "app.s3.public-endpoint") String publicEndpoint;
     @ConfigProperty(name = "quarkus.s3.aws.region") String region;
     @ConfigProperty(name = "quarkus.s3.aws.credentials.static-provider.access-key-id") String accessKey;
     @ConfigProperty(name = "quarkus.s3.aws.credentials.static-provider.secret-access-key") String secretKey;
@@ -45,9 +45,15 @@ public class MediaStorage {
     public MediaAsset upload(FileUpload file, String prefix) {
         MediaAsset asset = inspect(file, prefix);
         try {
+            // Cloudflare may cache images by extension. Never let a signed post
+            // image outlive its 60-second URL at a shared cache.
+            String cacheControl = "avatars".equals(prefix)
+                    ? "public, max-age=300"
+                    : "private, no-store";
             s3.putObject(PutObjectRequest.builder()
                     .bucket(bucket).key(asset.key()).contentType(asset.contentType())
-                    .contentLength(asset.size()).build(), RequestBody.fromFile(file.filePath()));
+                    .contentLength(asset.size()).cacheControl(cacheControl).build(),
+                    RequestBody.fromFile(file.filePath()));
             return asset;
         } catch (RuntimeException ex) {
             throw new ServiceUnavailableException("Media storage unavailable", 5L);

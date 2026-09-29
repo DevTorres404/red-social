@@ -86,6 +86,7 @@ export default function RegisterPage() {
             <img src="/logo.png" alt="" />
           </div>
 
+          <span className="auth-card-kicker" aria-hidden="true">EMPIEZA TU ÓRBITA</span>
           <h1 className="auth-title">Crea tu cuenta</h1>
           <p className="auth-subtitle">Expande tu universo. Crea tu cuenta y empieza a orbitar.</p>
 
