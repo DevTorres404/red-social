@@ -1,5 +1,6 @@
 # Standalone production stack. Never combine with docker-compose.yml:
-# Compose merges `ports` and would re-expose development ports 3000/8080/9000.
+# This variant publishes 3000/8080/9000 directly; provide external TLS before
+# accepting real credentials or enabling browser Push on a public server.
 # Required settings live in .env (start from .env.prod.example).
 name: orbit-prod
 
@@ -13,47 +14,64 @@ services:
       - neo4j_data:/data
       - neo4j_logs:/logs
     healthcheck:
-      test: ["CMD-SHELL", "cypher-shell -u neo4j -p \"$${NEO4J_AUTH#*/}\" 'RETURN 1' >/dev/null 2>&1"]
+      test: [ "CMD-SHELL", "cypher-shell -u neo4j -p \"$${NEO4J_AUTH#*/}\" 'RETURN 1' >/dev/null 2>&1" ]
       interval: 10s
       timeout: 10s
       retries: 12
       start_period: 40s
-    networks: [private]
+    networks: [ private ]
 
-  minio:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
-    restart: unless-stopped
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
+  rustfs-permissions:
+    image: busybox:1.37
+    user: root
+    restart: "no"
+    entrypoint: [ "sh", "-ec", "chown 10001:10001 /data" ]
     volumes:
-      - minio_data:/data
+      - rustfs_data:/data
+    networks: [ private ]
+
+  rustfs:
+    image: rustfs/rustfs@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff
+    restart: unless-stopped
+    environment:
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:?Set RUSTFS_ACCESS_KEY in .env}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:?Set RUSTFS_SECRET_KEY in .env}
+    volumes:
+      - rustfs_data:/data
+    ports:
+      - "9000:9000"
+    depends_on:
+      rustfs-permissions:
+        condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf -o /dev/null http://localhost:9000/minio/health/live"]
+      test: [ "CMD-SHELL", "curl -fsS http://127.0.0.1:9000/health >/dev/null" ]
       interval: 10s
       timeout: 10s
       retries: 12
-      start_period: 20s
-    networks: [private]
+      start_period: 40s
+    networks: [ private ]
 
-  minio-init:
-    image: minio/mc@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+  rustfs-init:
+    image: pgsty/mc:latest
     restart: "no"
-    entrypoint: ["/bin/sh", "-ec"]
-    command: >-
-      mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD";
-      mc mb --ignore-existing "local/$$MINIO_BUCKET";
-      mc anonymous set none "local/$$MINIO_BUCKET";
-      mc anonymous set download "local/$$MINIO_BUCKET/avatars"
+    entrypoint: [ "/bin/sh", "-ec" ]
+    command:
+      - |
+        mc alias set local http://rustfs:9000 "$$RUSTFS_ACCESS_KEY" "$$RUSTFS_SECRET_KEY"
+        mc mb --ignore-existing "local/$$RUSTFS_BUCKET"
+        mc anonymous set none "local/$$RUSTFS_BUCKET"
+        mc anonymous set download "local/$$RUSTFS_BUCKET/avatars"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
-      MINIO_BUCKET: ${MINIO_BUCKET:-red-social}
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:?Set RUSTFS_ACCESS_KEY in .env}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:?Set RUSTFS_SECRET_KEY in .env}
+      RUSTFS_BUCKET: ${RUSTFS_BUCKET:-red-social}
     depends_on:
-      minio:
+      rustfs:
         condition: service_healthy
-    networks: [private]
+    networks: [ private ]
 
   backend:
     build:
@@ -63,6 +81,8 @@ services:
     # Match the Linux owner of secrets/privateKey.pem (chmod 600). Do not make
     # the signing key world-readable just to satisfy a container UID mismatch.
     user: "${APP_UID:?Set APP_UID in .env}:${APP_GID:?Set APP_GID in .env}"
+    ports:
+      - "8080:8080"
     volumes:
       - ./secrets:/deployments/config:ro
     environment:
@@ -70,15 +90,15 @@ services:
       QUARKUS_NEO4J_URI: bolt://neo4j:7687
       QUARKUS_NEO4J_AUTHENTICATION_USERNAME: neo4j
       QUARKUS_NEO4J_AUTHENTICATION_PASSWORD: ${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in .env}
-      QUARKUS_S3_ENDPOINT_OVERRIDE: http://minio:9000
+      QUARKUS_S3_ENDPOINT_OVERRIDE: http://rustfs:9000
       QUARKUS_S3_AWS_REGION: ${AWS_REGION:-us-east-1}
       QUARKUS_S3_AWS_CREDENTIALS_TYPE: static
-      QUARKUS_S3_AWS_CREDENTIALS_STATIC_PROVIDER_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
-      QUARKUS_S3_AWS_CREDENTIALS_STATIC_PROVIDER_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
-      APP_MINIO_BUCKET: ${MINIO_BUCKET:-red-social}
-      APP_MINIO_PUBLIC_ENDPOINT: "https://${MEDIA_DOMAIN:?Set MEDIA_DOMAIN in .env}"
-      APP_WEBSOCKET_ALLOWED_ORIGIN: "https://${APP_DOMAIN:?Set APP_DOMAIN in .env}"
-      QUARKUS_HTTP_CORS_ORIGINS: "https://${APP_DOMAIN:?Set APP_DOMAIN in .env}"
+      QUARKUS_S3_AWS_CREDENTIALS_STATIC_PROVIDER_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY:?Set RUSTFS_ACCESS_KEY in .env}
+      QUARKUS_S3_AWS_CREDENTIALS_STATIC_PROVIDER_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY:?Set RUSTFS_SECRET_KEY in .env}
+      APP_S3_BUCKET: ${RUSTFS_BUCKET:-red-social}
+      APP_S3_PUBLIC_ENDPOINT: ${RUSTFS_PUBLIC_ENDPOINT:?Set browser-reachable RUSTFS_PUBLIC_ENDPOINT in .env}
+      APP_WEBSOCKET_ALLOWED_ORIGIN: ${APP_ORIGIN:?Set exact APP_ORIGIN in .env}
+      QUARKUS_HTTP_CORS_ORIGINS: ${APP_ORIGIN:?Set exact APP_ORIGIN in .env}
       SMALLRYE_JWT_SIGN_KEY_LOCATION: /deployments/config/privateKey.pem
       MP_JWT_VERIFY_PUBLICKEY_LOCATION: /deployments/config/publicKey.pem
       APP_VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:?Generate VAPID keys in .env}
@@ -89,51 +109,33 @@ services:
     depends_on:
       neo4j:
         condition: service_healthy
-      minio-init:
+      rustfs-init:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/q/health"]
+      test: [ "CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/q/health" ]
       interval: 15s
       timeout: 10s
       retries: 5
       start_period: 90s
-    networks: [private]
+    networks: [ private ]
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     restart: unless-stopped
+    ports:
+      - "3000:80"
     depends_on:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:80/"]
+      test: [ "CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:80/" ]
       interval: 15s
       timeout: 10s
       retries: 5
       start_period: 20s
-    networks: [private]
-
-  proxy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      APP_DOMAIN: ${APP_DOMAIN:?Set APP_DOMAIN in .env}
-      MEDIA_DOMAIN: ${MEDIA_DOMAIN:?Set MEDIA_DOMAIN in .env}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      frontend:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-    networks: [private]
+    networks: [ private ]
 
 networks:
   private:
@@ -141,6 +143,4 @@ networks:
 volumes:
   neo4j_data:
   neo4j_logs:
-  minio_data:
-  caddy_data:
-  caddy_config:
+  rustfs_data:

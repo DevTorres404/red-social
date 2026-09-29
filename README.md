@@ -1,17 +1,17 @@
 # Red Social Distribuida
 
-Aplicación de curso con React, Quarkus, Neo4j y MinIO. El modelo social usa **seguimiento dirigido**: seguir a alguien no crea una amistad ni un seguimiento recíproco.
+Aplicación de curso con React, Quarkus, Neo4j y RustFS. El modelo social usa **seguimiento dirigido**: seguir a alguien no crea una amistad ni un seguimiento recíproco.
 
 ## Arquitectura
 
 ```text
 Navegador React ── REST / WebSocket ── Quarkus ── Cypher ── Neo4j
-                                          └──── S3 ───── MinIO privado
+                                          └──── S3 ───── RustFS privado
                                           └──── Web Push ───── servicio del navegador
 ```
 
 - Neo4j conserva usuarios, relaciones, publicaciones, mensajes y referencias a imágenes; nunca almacena archivos binarios.
-- MinIO conserva los bytes de las imágenes. El backend autoriza la lectura antes de emitir una URL firmada de 60 segundos.
+- RustFS conserva los bytes de las imágenes. El backend autoriza la lectura antes de emitir una URL firmada de 60 segundos.
 - El historial de chat se consulta por REST. WebSocket entrega mensajes nuevos sin polling.
 - Las publicaciones crean trabajos Web Push durables en Neo4j; un proceso separado los entrega sin bloquear la publicación.
 - La vista «Red» muestra recorridos y publicaciones calculados por cinco consultas Cypher reales, no un dibujo precargado.
@@ -23,27 +23,30 @@ Requisitos: Docker Compose v2, Git Bash/WSL y OpenSSL para generar las claves JW
 
 ```bash
 cp .env.example .env
+# Antes de continuar, define RUSTFS_ACCESS_KEY y RUSTFS_SECRET_KEY únicos en .env.
 sh scripts/generate-jwt-keys.sh
 node scripts/generate-vapid-keys.mjs
 docker compose up --build
 ```
 
-No usar `APP_SEED_FORCE=true` sobre datos que se quieran conservar. Los volúmenes de Neo4j y MinIO persisten entre reinicios; `docker compose down -v` los elimina.
+No usar `APP_SEED_FORCE=true` sobre datos que se quieran conservar. Los volúmenes de Neo4j y RustFS persisten entre reinicios; `docker compose down -v` los elimina.
+
+Al sustituir una instalación MinIO existente, Orbit crea un volumen RustFS nuevo: **las imágenes antiguas no se copian** y sus referencias anteriores dejarán de mostrarse. El volumen antiguo no se borra automáticamente.
 
 | Servicio | Dirección local |
 |---|---|
 | Aplicación | http://localhost:3000 |
 | API / Swagger | http://localhost:8080 / http://localhost:8080/q/swagger-ui |
 | Neo4j Browser | http://localhost:7474 |
-| Consola MinIO | http://localhost:9001 |
+| Consola RustFS | http://localhost:9001 |
 
-En `.env` deben configurarse secretos reales, no los valores de ejemplo. `MINIO_PUBLIC_ENDPOINT` debe ser accesible desde los navegadores que abrirán imágenes; `WEBSOCKET_ALLOWED_ORIGIN` debe coincidir exactamente con el origen del frontend. En un despliegue HTTPS, ambos deben usar direcciones seguras y coherentes con el proxy. Las claves privadas JWT se generan en `secrets/` (ignorado por Git) y se montan de solo lectura.
+En `.env` deben configurarse secretos reales, no los valores de ejemplo. `RUSTFS_PUBLIC_ENDPOINT` debe ser accesible desde los navegadores que abrirán imágenes; `WEBSOCKET_ALLOWED_ORIGIN` debe coincidir exactamente con el origen del frontend. En un despliegue HTTPS, ambos deben usar direcciones seguras y coherentes con el túnel (ej. Cloudflare Tunnel). Las claves privadas JWT se generan en `secrets/` (ignorado por Git) y se montan de solo lectura.
 
-## Despliegue HTTPS (producción)
+## Despliegue en servidor
 
-Usa el Compose **autónomo** `docker-compose.prod.yml`, no lo combines con el de desarrollo. Caddy publica únicamente 80/443 y obtiene certificados TLS para dos dominios: la aplicación y las imágenes. Neo4j, MinIO, backend y frontend quedan internos. La base nueva arranca sin cuentas de demostración.
+Usa el Compose **autónomo** `docker-compose.prod.yml`, no lo combines con el de desarrollo. Esta variante publica 3000 (app), 8080 (API) y 9000 (S3); Neo4j y la consola RustFS permanecen internos. **No incluye TLS:** antes de introducir credenciales reales en Internet, añade terminación HTTPS externa o limita el acceso mediante firewall/VPN. Web Push fuera de localhost requiere HTTPS. La base nueva arranca sin cuentas de demostración.
 
-Los requisitos, la plantilla `.env.prod.example`, el primer arranque, las verificaciones, actualizaciones y respaldos están en [comando.md](comando.md). Web Push y la cookie segura requieren HTTPS válido fuera de localhost.
+Los requisitos, la plantilla `.env.prod.example`, el primer arranque, las verificaciones, actualizaciones y respaldos están en [comando.md](comando.md).
 
 ## Modelo de datos esencial
 
@@ -57,7 +60,7 @@ El inicio de sesión acepta **email o nombre de usuario** en el mismo campo. `PO
 (:Usuario)-[:PARTICIPA]->(:Conversacion)
 ```
 
-`mediaKey` es una clave generada por el servidor, no una URL suministrada por el cliente. Las imágenes se guardan en el bucket privado `red-social` (o `MINIO_BUCKET`).
+`mediaKey` es una clave generada por el servidor, no una URL suministrada por el cliente. Las imágenes se guardan en el bucket privado `red-social` (o `RUSTFS_BUCKET`).
 
 ## Publicaciones con imagen
 
@@ -102,7 +105,7 @@ cd ..; ./scripts/phase-a-c-smoke.ps1
 ./scripts/phase-f-g-smoke.ps1
 ```
 
-Para comprobar el fallo de almacenamiento por separado, ejecutar `./scripts/phase-d-outage-smoke.ps1`: detiene MinIO temporalmente, verifica `503` sin post huérfano y lo reinicia en `finally`. No ejecutarlo mientras otra persona esté usando ese servicio local.
+Para comprobar el fallo de almacenamiento por separado, ejecutar `./scripts/phase-d-outage-smoke.ps1`: detiene RustFS temporalmente, verifica `503` sin post huérfano y lo reinicia en `finally`. No ejecutarlo mientras otra persona esté usando ese servicio local.
 
 Los smoke usan usuarios temporales con nombres únicos y eliminan únicamente los datos que generan. Requieren los servicios levantados y `.env` local para la limpieza de prueba. La puerta de salida y los casos todavía no verificados se mantienen en [PLAN.md](PLAN.md).
 
