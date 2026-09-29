@@ -25,7 +25,7 @@ self.addEventListener('push', (event) => {
     body:      BODIES[type] || 'Abrí Orbit para más detalles.',
     tag:       data.refId || data.postId || type,
     renotify:  false,
-    icon:      '/favicon.svg',
+    icon:      '/logo.png',
     data:      { path },
   }));
 });
