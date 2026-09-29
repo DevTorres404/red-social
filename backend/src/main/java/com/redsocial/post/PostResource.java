@@ -110,7 +110,7 @@ public class PostResource {
         Post post = postRepository.findById(postId, currentUser.id())
                 .orElseThrow(() -> new NotFoundException("Post not found: " + postId));
         if (post.mediaKey().isBlank()) throw new NotFoundException("Post has no image");
-        return Map.of("url", mediaStorage.presignedReadUrl(post.mediaKey()));
+        return Map.of("url", mediaStorage.publicUrl(post.mediaKey()));
     }
 
     @DELETE
