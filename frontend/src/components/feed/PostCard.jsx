@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Heart, MessageCircle, Trash2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { postsApi } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import PostImage from './PostImage';
@@ -86,7 +86,7 @@ export default function PostCard({ post, onDeleted, showAuthor = true }) {
       {/* Header */}
       <div className="post-card-header">
         {showAuthor ? (
-          <div className="post-card-author">
+          <Link to={`/users/${post.authorId}`} className="post-card-author" onClick={(event) => event.stopPropagation()} aria-label={`Ver perfil de ${post.authorUsername}`}>
             <div className="post-card-avatar">
               {post.authorAvatarUrl ? (
                 <img src={post.authorAvatarUrl} alt={post.authorUsername} />
@@ -101,7 +101,7 @@ export default function PostCard({ post, onDeleted, showAuthor = true }) {
               </div>
               <div className="post-card-date">{formatDate(post.createdAt)}</div>
             </div>
-          </div>
+          </Link>
         ) : <div className="post-card-date">{formatDate(post.createdAt)}</div>}
         {user?.id === post.authorId && (
           <button

@@ -6,6 +6,7 @@ import com.redsocial.notification.InAppNotificationService;
 import com.redsocial.notification.PushNotificationService;
 import com.redsocial.post.dto.CreateCommentRequest;
 import com.redsocial.post.dto.CreatePostRequest;
+import com.redsocial.post.dto.CommentReactionRequest;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
@@ -19,6 +20,7 @@ import org.jboss.resteasy.reactive.multipart.FileUpload;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * REST endpoints for (:Post) and (:Comentario) nodes.
@@ -32,6 +34,7 @@ import java.util.Map;
 @RolesAllowed("user")
 @Tag(name = "Posts")
 public class PostResource {
+    static final Set<String> COMMENT_EMOJIS = Set.of("❤️", "😂", "😍", "😮", "😢", "👏");
 
     @Inject
     PostRepository postRepository;
@@ -110,7 +113,7 @@ public class PostResource {
         Post post = postRepository.findById(postId, currentUser.id())
                 .orElseThrow(() -> new NotFoundException("Post not found: " + postId));
         if (post.mediaKey().isBlank()) throw new NotFoundException("Post has no image");
-        return Map.of("url", mediaStorage.publicUrl(post.mediaKey()));
+        return Map.of("url", mediaStorage.presignedReadUrl(post.mediaKey()));
     }
 
     @DELETE
@@ -118,8 +121,7 @@ public class PostResource {
     @Operation(summary = "Delete a post (author only)")
     public Response delete(@PathParam("postId") String postId) {
         String userId = currentUser.id();
-        String mediaKey = postRepository.delete(postId, userId);
-        if (!mediaKey.isBlank()) mediaCleanup.deleteQueued(mediaKey);
+        for (String mediaKey : postRepository.delete(postId, userId)) mediaCleanup.deleteQueued(mediaKey);
         return Response.noContent().build();
     }
 
@@ -165,7 +167,7 @@ public class PostResource {
     public List<Post.Comment> getComments(@PathParam("postId") String postId) {
         postRepository.findById(postId, currentUser.id())
                 .orElseThrow(() -> new NotFoundException("Post not found: " + postId));
-        return postRepository.findComments(postId);
+        return postRepository.findComments(postId, currentUser.id());
     }
 
     @POST
@@ -174,11 +176,80 @@ public class PostResource {
     public Response addComment(@PathParam("postId") String postId,
                                @Valid CreateCommentRequest request) {
         String userId = currentUser.id();
-        Post.Comment comment = postRepository.addComment(postId, userId, request.text());
+        Post.Comment comment = postRepository.addComment(postId, userId, request.text().trim(), null);
+        publishComment(postId, userId, comment);
+        return Response.status(Response.Status.CREATED).entity(comment).build();
+    }
+
+    @POST
+    @Path("/{postId}/comments/with-image")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Operation(summary = "Add a comment with one validated PNG or JPEG image")
+    public Response addCommentWithImage(@PathParam("postId") String postId,
+                                        @RestForm String text,
+                                        @RestForm(FileUpload.ALL) List<FileUpload> files) {
+        String content = text == null ? "" : text.trim();
+        if (content.length() > 500) throw new BadRequestException("Comment cannot exceed 500 characters");
+        if (files == null || files.size() != 1 || !"image".equals(files.get(0).name())) {
+            throw new BadRequestException("Exactly one image is required");
+        }
+        postRepository.findById(postId, currentUser.id())
+                .orElseThrow(() -> new NotFoundException("Post not found: " + postId));
+        MediaAsset image = mediaStorage.upload(files.get(0), "comments");
+        String userId = currentUser.id();
+        Post.Comment comment;
+        try {
+            comment = postRepository.addComment(postId, userId, content, image);
+        } catch (RuntimeException ex) {
+            mediaCleanup.deleteOrQueue(image.key());
+            throw ex;
+        }
+        publishComment(postId, userId, comment);
+        return Response.status(Response.Status.CREATED).entity(comment).build();
+    }
+
+    @GET
+    @Path("/{postId}/comments/{commentId}/media-url")
+    @Operation(summary = "Issue a short-lived read URL for a comment image")
+    public Map<String, String> commentMediaUrl(@PathParam("postId") String postId,
+                                               @PathParam("commentId") String commentId) {
+        Post.Comment comment = postRepository.findComment(postId, commentId, currentUser.id());
+        if (comment.mediaKey().isBlank()) throw new NotFoundException("Comment has no image");
+        return Map.of("url", mediaStorage.presignedReadUrl(comment.mediaKey()));
+    }
+
+    @PUT
+    @Path("/{postId}/comments/{commentId}/reaction")
+    @Operation(summary = "Set one emoji reaction on a comment")
+    public Post.Comment reactToComment(@PathParam("postId") String postId,
+                                       @PathParam("commentId") String commentId,
+                                       CommentReactionRequest request) {
+        if (request == null || !COMMENT_EMOJIS.contains(request.emoji())) {
+            throw new BadRequestException("Unsupported comment reaction");
+        }
+        String userId = currentUser.id();
+        postRepository.setCommentReaction(postId, commentId, userId, request.emoji());
+        Post.Comment comment = postRepository.findComment(postId, commentId, userId);
+        feedDelivery.publishCommentReactionChanged(postId, commentId, userId, comment.reactions(), request.emoji());
+        return comment;
+    }
+
+    @DELETE
+    @Path("/{postId}/comments/{commentId}/reaction")
+    @Operation(summary = "Remove my emoji reaction from a comment")
+    public Post.Comment removeCommentReaction(@PathParam("postId") String postId,
+                                              @PathParam("commentId") String commentId) {
+        String userId = currentUser.id();
+        postRepository.removeCommentReaction(postId, commentId, userId);
+        Post.Comment comment = postRepository.findComment(postId, commentId, userId);
+        feedDelivery.publishCommentReactionChanged(postId, commentId, userId, comment.reactions(), "");
+        return comment;
+    }
+
+    private void publishComment(String postId, String userId, Post.Comment comment) {
         postRepository.findById(postId, userId).ifPresent(post -> {
             feedDelivery.publishCommentCreated(postId, comment, post.commentCount());
             inAppNotifications.onPostCommented(userId, postId, comment.id(), post.authorId());
         });
-        return Response.status(Response.Status.CREATED).entity(comment).build();
     }
 }

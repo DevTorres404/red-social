@@ -9,6 +9,7 @@ import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
 import java.util.Set;
+import java.util.Map;
 
 /**
  * Broadcast-only delivery of feed events over open /ws/feed connections.
@@ -32,6 +33,8 @@ public class FeedDelivery {
     public record StatusEvent(String type, String error) {}
     public record CommentEvent(String type, String postId, long commentCount, Post.Comment comment) {}
     public record LikeEvent(String type, String postId, String actorId, long likeCount, boolean liked) {}
+    public record CommentReactionEvent(String type, String postId, String commentId, String actorId,
+                                       Map<String, Long> reactions, String emoji) {}
 
     @Inject OpenConnections connections;
     @Inject FeedTickets tickets;
@@ -43,6 +46,12 @@ public class FeedDelivery {
 
     public void publishLikeChanged(String postId, String actorId, long likeCount, boolean liked) {
         broadcast("like-changed", postId, new LikeEvent("like-changed", postId, actorId, likeCount, liked));
+    }
+
+    public void publishCommentReactionChanged(String postId, String commentId, String actorId,
+                                              Map<String, Long> reactions, String emoji) {
+        broadcast("comment-reaction-changed", postId,
+                new CommentReactionEvent("comment-reaction-changed", postId, commentId, actorId, reactions, emoji));
     }
 
     public void send(WebSocketConnection connection, Object event) {

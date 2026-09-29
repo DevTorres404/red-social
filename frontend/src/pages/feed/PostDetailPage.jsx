@@ -1,264 +1,242 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { ArrowLeft, Send } from 'lucide-react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, ImagePlus, Send, SmilePlus, Trash2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { postsApi } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useFeedEvents } from '../../context/FeedEventsContext';
 import PostCard from '../../components/feed/PostCard';
+import './PostDetailPage.css';
+
+const EMOJIS = ['❤️', '😂', '😍', '😮', '😢', '👏'];
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+function relativeDate(value) {
+  if (!value) return '';
+  try { return formatDistanceToNow(new Date(value), { addSuffix: true, locale: es }); }
+  catch { return ''; }
+}
+
+function CommentImage({ postId, comment }) {
+  const [url, setUrl] = useState('');
+  const [error, setError] = useState('');
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    postsApi.commentMediaUrl(postId, comment.id).then((result) => {
+      if (active) { setUrl(result.url); setError(''); }
+    }).catch((err) => { if (active) setError(err.message || 'No se pudo cargar la imagen.'); });
+    return () => { active = false; };
+  }, [postId, comment.id, attempt]);
+
+  if (error) return <button type="button" className="comment-image-retry" onClick={() => { setError(''); setAttempt((value) => value + 1); }}>Reintentar imagen</button>;
+  if (!url) return <div className="comment-image-loading" role="status">Cargando imagen...</div>;
+  return <img className="comment-image" src={url} alt={`Imagen del comentario de @${comment.authorUsername}`}
+    onError={() => setError('La imagen no está disponible o su enlace expiró.')} />;
+}
 
 export default function PostDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { subscribe } = useFeedEvents();
-  
+  const fileInputRef = useRef(null);
+  const commentsRef = useRef([]);
+
   const [post, setPost] = useState(null);
   const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  
   const [newComment, setNewComment] = useState('');
+  const [imageSelection, setImageSelection] = useState(null);
+  const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // Latest comments, readable from the submit handler after an await.
-  const commentsRef = useRef([]);
+  const [reactionMenuId, setReactionMenuId] = useState('');
+  const [reactionBusyId, setReactionBusyId] = useState('');
+  const [reactionError, setReactionError] = useState(null);
+
   useEffect(() => { commentsRef.current = comments; }, [comments]);
+  useEffect(() => () => { if (imageSelection?.preview) URL.revokeObjectURL(imageSelection.preview); }, [imageSelection]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const [postData, commentsData] = await Promise.all([
-        postsApi.getById(id),
-        postsApi.getComments(id)
-      ]);
+      const [postData, commentsData] = await Promise.all([postsApi.getById(id), postsApi.getComments(id)]);
       setPost(postData);
       setComments(commentsData || []);
     } catch (err) {
-      setError(err.message || 'Error al cargar la publicación');
+      setError(err.message || 'No se pudo cargar la publicación.');
     } finally {
       setLoading(false);
     }
   }, [id]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Real-time updates for this post: append new comments (dedup against the
-  // optimistic append of the author's own comment) and sync like state/count.
   useEffect(() => {
     const unsubscribe = subscribe((event) => {
       if (!event || event.postId !== id) return;
       if (event.type === 'comment-created' && event.comment) {
-        setComments((prev) =>
-          prev.some((comment) => comment.id === event.comment.id) ? prev : [...prev, event.comment]);
-        setPost((prev) => prev ? { ...prev, commentCount: event.commentCount } : prev);
+        setComments((previous) => previous.some((comment) => comment.id === event.comment.id)
+          ? previous : [...previous, event.comment]);
+        setPost((previous) => previous ? { ...previous, commentCount: event.commentCount } : previous);
+      } else if (event.type === 'comment-reaction-changed') {
+        setComments((previous) => previous.map((comment) => comment.id === event.commentId
+          ? { ...comment, reactions: event.reactions,
+            myReaction: event.actorId === user?.id ? event.emoji : comment.myReaction }
+          : comment));
       } else if (event.type === 'like-changed') {
-        setPost((prev) => {
-          if (!prev) return prev;
-          const next = { ...prev, likeCount: event.likeCount };
-          if (user && event.actorId === user.id) next.likedByCurrentUser = event.liked;
-          return next;
-        });
+        setPost((previous) => previous ? {
+          ...previous, likeCount: event.likeCount,
+          likedByCurrentUser: event.actorId === user?.id ? event.liked : previous.likedByCurrentUser,
+        } : previous);
       }
     });
     return unsubscribe;
-  }, [subscribe, id, user]);
+  }, [subscribe, id, user?.id]);
 
-  const handleCommentSubmit = async (e) => {
-    e.preventDefault();
-    if (!newComment.trim()) return;
+  const selectImage = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!['image/png', 'image/jpeg'].includes(file.type) || !/\.(png|jpe?g)$/i.test(file.name)) {
+      setFormError('Elige una imagen PNG o JPEG válida.');
+      event.target.value = '';
+      return;
+    }
+    if (!file.size || file.size > MAX_IMAGE_BYTES) {
+      setFormError('La imagen debe pesar como máximo 5 MiB.');
+      event.target.value = '';
+      return;
+    }
+    setImageSelection({ file, preview: URL.createObjectURL(file) });
+    setFormError('');
+  };
 
+  const removeImage = () => {
+    setImageSelection(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleCommentSubmit = async (event) => {
+    event.preventDefault();
+    const text = newComment.trim();
+    if ((!text && !imageSelection) || isSubmitting) return;
     setIsSubmitting(true);
+    setFormError('');
     try {
-      const addedComment = await postsApi.addComment(id, newComment.trim());
-      // Dedup: the broadcast channel may have delivered this comment already.
-      const echoed = commentsRef.current.some(c => c.id === addedComment.id);
-      setComments(prev => prev.some(c => c.id === addedComment.id) ? prev : [...prev, addedComment]);
+      const added = imageSelection
+        ? await postsApi.addCommentWithImage(id, text, imageSelection.file)
+        : await postsApi.addComment(id, text);
+      const echoed = commentsRef.current.some((comment) => comment.id === added.id);
+      setComments((previous) => previous.some((comment) => comment.id === added.id) ? previous : [...previous, added]);
+      setPost((previous) => previous ? {
+        ...previous, commentCount: echoed ? previous.commentCount : (previous.commentCount || 0) + 1,
+      } : previous);
       setNewComment('');
-      // The server broadcasts the frame BEFORE the 201 and that frame carries the
-      // ABSOLUTE count: only count it here when the echo has not landed yet.
-      setPost(prev => prev ? { ...prev, commentCount: echoed ? prev.commentCount : (prev.commentCount || 0) + 1 } : prev);
+      removeImage();
     } catch (err) {
-      alert(err.message || 'Error al enviar comentario');
+      setFormError(err.message || 'No se pudo publicar el comentario.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (loading) {
-    return <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>Cargando...</div>;
-  }
+  const handleReaction = async (comment, emoji) => {
+    if (reactionBusyId) return;
+    setReactionBusyId(comment.id);
+    setReactionError(null);
+    try {
+      const updated = comment.myReaction === emoji
+        ? await postsApi.removeCommentReaction(id, comment.id)
+        : await postsApi.reactToComment(id, comment.id, emoji);
+      setComments((previous) => previous.map((item) => item.id === comment.id ? updated : item));
+      setReactionMenuId('');
+    } catch (err) {
+      setReactionError({ commentId: comment.id, message: err.message || 'No se pudo guardar tu reacción.' });
+    } finally {
+      setReactionBusyId('');
+    }
+  };
 
-  if (error || !post) {
-    return (
-      <div style={{ maxWidth: '600px', margin: '0 auto', padding: '24px 16px' }}>
-        <button onClick={() => navigate(-1)} style={{ color: 'var(--accent)', marginBottom: '16px', background: 'none' }}>
-          &larr; Volver
-        </button>
-        <div style={{ color: 'var(--error)' }}>{error || 'Publicación no encontrada'}</div>
-        <button onClick={() => navigate('/feed')} style={{ color: 'var(--accent)', marginTop: 16, background: 'none' }}>
-          Ir al inicio
-        </button>
-      </div>
-    );
-  }
+  if (loading) return <div className="post-detail-status" role="status">Cargando publicación...</div>;
+  if (error || !post) return <div className="post-detail-status" role="alert">
+    <p>{error || 'Publicación no encontrada.'}</p>
+    <button type="button" onClick={() => navigate('/feed')}>Ir al feed</button>
+  </div>;
 
-  return (
-    <div style={{
-      maxWidth: '600px',
-      margin: '0 auto',
-      padding: '24px 16px',
-      minHeight: '100vh',
-    }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-        <button 
-          onClick={() => navigate(-1)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '40px',
-            height: '40px',
-            borderRadius: '50%',
-            background: 'transparent',
-            color: 'var(--text)',
-            transition: 'background 0.2s',
-          }}
-          onMouseOver={(e) => e.currentTarget.style.background = 'var(--surface-2)'}
-          onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
-        >
-          <ArrowLeft size={24} />
-        </button>
-        <h1 style={{ fontSize: '20px', fontWeight: 700 }}>Publicación</h1>
-      </div>
+  return <main className="post-detail-page">
+    <header className="post-detail-header">
+      <button type="button" onClick={() => navigate(-1)} aria-label="Volver"><ArrowLeft size={20} /></button>
+      <div><span>ORBIT · CONVERSACIÓN</span><h1>Publicación</h1></div>
+    </header>
 
-      {/* Main Post (reusing PostCard but without cursor pointer) */}
-      <div style={{ pointerEvents: 'none' }}>
-        <div style={{ pointerEvents: 'auto' }}>
-           <PostCard post={post} onDeleted={() => navigate('/feed')} />
+    <PostCard post={post} onDeleted={() => navigate('/feed')} />
+
+    <section className="post-comments" aria-labelledby="comments-title">
+      <div className="post-comments-heading"><div><span>LA CONVERSACIÓN</span><h2 id="comments-title">Comentarios <small>{comments.length}</small></h2></div>
+        <p>Comparte una idea o una imagen con tu red.</p></div>
+
+      <form className="comment-composer" onSubmit={handleCommentSubmit}>
+        <Link className="comment-composer-avatar" to={`/users/${user.id}`} aria-label="Ir a mi perfil">
+          {user.avatarUrl ? <img src={user.avatarUrl} alt="" /> : user.username?.slice(0, 1).toUpperCase()}
+        </Link>
+        <div className="comment-composer-body">
+          <label className="sr-only" htmlFor="new-comment">Escribe un comentario</label>
+          <textarea id="new-comment" placeholder="¿Qué piensas?" value={newComment} maxLength={500}
+            onChange={(event) => setNewComment(event.target.value)} rows={3} />
+          {imageSelection && <div className="comment-preview">
+            <img src={imageSelection.preview} alt="Vista previa de la imagen para el comentario" />
+            <button type="button" onClick={removeImage} aria-label="Quitar imagen"><Trash2 size={16} /></button>
+          </div>}
+          <div className="comment-composer-actions">
+            <input ref={fileInputRef} type="file" accept="image/png,image/jpeg" onChange={selectImage} hidden />
+            <button type="button" className="comment-attach" onClick={() => fileInputRef.current?.click()} disabled={isSubmitting}>
+              <ImagePlus size={18} /> Añadir imagen
+            </button>
+            <span>{newComment.length}/500</span>
+            <button type="submit" className="comment-submit" disabled={isSubmitting || (!newComment.trim() && !imageSelection)}>
+              <Send size={17} /> {isSubmitting ? 'Publicando...' : 'Comentar'}
+            </button>
+          </div>
+          {formError && <p className="comment-error" role="alert">{formError}</p>}
         </div>
-      </div>
+      </form>
 
-      {/* Comments Section */}
-      <div style={{ marginTop: '24px' }}>
-        <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '16px' }}>Comentarios</h2>
-        
-        {/* Create Comment Form */}
-        <form onSubmit={handleCommentSubmit} style={{ marginBottom: '32px' }}>
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <div style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '50%',
-              background: 'var(--accent)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#fff',
-              fontWeight: 'bold',
-              fontSize: '16px',
-              flexShrink: 0
-            }}>
-              {user?.username?.charAt(0).toUpperCase()}
-            </div>
-            <div style={{ flex: 1, position: 'relative' }}>
-              <input
-                type="text"
-                placeholder="Responde a esta publicación..."
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                style={{
-                  width: '100%',
-                  background: 'var(--surface)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 'var(--radius)',
-                  padding: '12px 48px 12px 16px',
-                  color: 'var(--text)',
-                  fontSize: '15px',
-                  outline: 'none',
-                }}
-              />
-              <button
-                type="submit"
-                disabled={!newComment.trim() || isSubmitting}
-                style={{
-                  position: 'absolute',
-                  right: '8px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'transparent',
-                  color: newComment.trim() ? 'var(--accent)' : 'var(--border)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: newComment.trim() ? 'pointer' : 'default',
-                  opacity: isSubmitting ? 0.5 : 1
-                }}
-              >
-                <Send size={20} />
+      <div className="comment-list">
+        {comments.map((comment) => <article key={comment.id} className="comment-card">
+          <Link className="comment-avatar" to={`/users/${comment.authorId}`} aria-label={`Ver perfil de ${comment.authorUsername}`}>
+            {comment.authorAvatarUrl ? <img src={comment.authorAvatarUrl} alt="" /> : comment.authorUsername?.slice(0, 1).toUpperCase() || '?'}
+          </Link>
+          <div className="comment-body">
+            <div className="comment-meta"><Link to={`/users/${comment.authorId}`}>@{comment.authorUsername}</Link>
+              <time dateTime={comment.createdAt}>{relativeDate(comment.createdAt)}</time></div>
+            {comment.text && <p className="comment-text">{comment.text}</p>}
+            {comment.mediaKey && <CommentImage postId={id} comment={comment} />}
+            <div className="comment-reactions">
+              {EMOJIS.filter((emoji) => (comment.reactions?.[emoji] || 0) > 0).map((emoji) => <button key={emoji}
+                type="button" className={`comment-reaction-pill ${comment.myReaction === emoji ? 'selected' : ''}`}
+                aria-label={`${emoji}: ${comment.reactions[emoji]} reacciones${comment.myReaction === emoji ? ', tu reacción' : ''}`}
+                aria-pressed={comment.myReaction === emoji} disabled={Boolean(reactionBusyId)}
+                onClick={() => handleReaction(comment, emoji)}>{emoji} <span>{comment.reactions[emoji]}</span></button>)}
+              <button type="button" className="comment-react-trigger" aria-expanded={reactionMenuId === comment.id}
+                aria-label={`Reaccionar al comentario de ${comment.authorUsername}`}
+                onClick={() => setReactionMenuId(reactionMenuId === comment.id ? '' : comment.id)}>
+                <SmilePlus size={17} /> Reaccionar
               </button>
             </div>
+            {reactionMenuId === comment.id && <div className="comment-emoji-picker" aria-label="Elige una reacción">
+              {EMOJIS.map((emoji) => <button type="button" key={emoji} aria-label={`Reaccionar con ${emoji}`}
+                aria-pressed={comment.myReaction === emoji} disabled={Boolean(reactionBusyId)}
+                onClick={() => handleReaction(comment, emoji)}>{emoji}</button>)}
+            </div>}
+            {reactionError?.commentId === comment.id && <p className="comment-error" role="alert">{reactionError.message}</p>}
           </div>
-        </form>
-
-        {/* Comments List */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {comments.map((comment) => (
-            <motion.div 
-              key={comment.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              style={{
-                display: 'flex',
-                gap: '12px',
-                padding: '16px',
-                background: 'var(--surface)',
-                borderRadius: 'var(--radius)',
-                border: '1px solid var(--border)'
-              }}
-            >
-              <div style={{
-                width: '36px',
-                height: '36px',
-                borderRadius: '50%',
-                background: 'var(--accent-2)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#fff',
-                fontWeight: 'bold',
-                fontSize: '14px',
-                flexShrink: 0
-              }}>
-                {comment.authorUsername?.charAt(0).toUpperCase() || '?'}
-              </div>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '4px' }}>
-                  <span style={{ fontWeight: 600, color: 'var(--text)', fontSize: '15px' }}>
-                    {comment.authorUsername}
-                  </span>
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                    {comment.createdAt ? formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true, locale: es }) : ''}
-                  </span>
-                </div>
-                <div style={{ color: 'var(--text)', fontSize: '15px' }}>
-                  {comment.text}
-                </div>
-              </div>
-            </motion.div>
-          ))}
-          {comments.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
-              Sé el primero en responder.
-            </div>
-          )}
-        </div>
+        </article>)}
+        {!comments.length && <div className="comment-empty">Aún no hay comentarios. Inicia la conversación.</div>}
       </div>
-    </div>
-  );
+    </section>
+  </main>;
 }

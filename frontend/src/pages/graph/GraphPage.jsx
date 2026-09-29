@@ -2,9 +2,10 @@
 
 const PAGE_SIZE = 5;
 import { Link } from 'react-router-dom';
-import { ArrowRight, Compass, Heart, Map as MapIcon, RefreshCw, Sparkles, TrendingUp, Users } from 'lucide-react';
+import { ArrowRight, Compass, Heart, Map as MapIcon, RefreshCw, Search, Sparkles, TrendingUp, Users } from 'lucide-react';
 import { graphApi, usersApi } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
+import { buildNetworkMap, MAP_HEIGHT, MAP_WIDTH } from './networkMap';
 import './GraphPage.css';
 
 const tabs = [
@@ -71,6 +72,8 @@ export default function GraphPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [followingId, setFollowingId] = useState('');
+  const [selectedNodeId, setSelectedNodeId] = useState(user.id);
+  const [mapQuery, setMapQuery] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -117,21 +120,17 @@ export default function GraphPage() {
     finally { setFollowingId(''); }
   };
 
-  const graph = useMemo(() => {
-    if (!data) return { nodes: [], edges: [] };
-    const nodes = [{ id: user.id, username: user.username, distance: 0 }, ...(data.reachable || [])];
-    const index = new Map(nodes.map((node, i) => [node.id, {
-      ...node,
-      x: 350 + (node.distance === 0 ? 0 : (node.distance === 1 ? 130 : 240) * Math.cos((i * 2.399) - 1)),
-      y: 280 + (node.distance === 0 ? 0 : (node.distance === 1 ? 130 : 190) * Math.sin((i * 2.399) - 1)),
-    }]));
-    const edges = (data.reachable || []).map((node) => ({ from: node.distance === 1 ? user.id : node.viaId, to: node.id }));
-    return { nodes: [...index.values()], edges };
-  }, [data, user.id, user.username]);
-
   const direct = (data?.reachable || []).filter((person) => person.distance === 1);
   const second = (data?.reachable || []).filter((person) => person.distance === 2);
   const directById = new Map(direct.map((person) => [person.id, person.username]));
+  const graph = useMemo(() => buildNetworkMap(user, data?.reachable || [], selectedNodeId), [data, user, selectedNodeId]);
+  const selectedPerson = (data?.reachable || []).find((person) => person.id === selectedNodeId) || user;
+  const visibleMapPeople = (data?.reachable || []).filter((person) =>
+    person.username.toLocaleLowerCase().includes(mapQuery.trim().toLocaleLowerCase()));
+  const highlightedEdges = new Set(selectedPerson.distance === 2
+    ? [`${user.id}-${selectedPerson.viaId}`, `${selectedPerson.viaId}-${selectedPerson.id}`]
+    : selectedPerson.distance === 1 ? [`${user.id}-${selectedPerson.id}`] : []);
+  const graphById = new Map(graph.nodes.map((node) => [node.id, node]));
   const posts = postOrder === 'latest' ? data?.networkPosts || [] : data?.trendingPosts || [];
   const followedIds = new Set(following.map(person => person.id));
   const peopleById = new Map();
@@ -283,28 +282,74 @@ export default function GraphPage() {
     {data && activeTab === 'map' && <section className="network-map-section" aria-labelledby="map-title">
       <div className="network-section-heading"><div><span className="network-section-kicker"><MapIcon size={15} /> MAPA SOCIAL</span>
         <h2 id="map-title">Así se conecta tu órbita</h2>
-        <p>Las flechas representan a quién sigue cada persona. Tu círculo aparece en azul; las personas a dos pasos, en violeta.</p></div></div>
-      <div className="network-map-key"><span><i className="key-self" /> Tú</span><span><i className="key-direct" /> Tu círculo</span><span><i className="key-second" /> A dos pasos</span></div>
-      <div className="network-map-canvas" role="img" aria-label={`Mapa de ${graph.nodes.length} personas y ${graph.edges.length} conexiones`}>
-        <svg viewBox="0 0 700 560" aria-hidden="true">
-          <defs><marker id="follow-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#aba3d0" /></marker></defs>
-          <circle cx="350" cy="280" r="130" className="map-ring" /><circle cx="350" cy="280" r="245" className="map-ring map-ring-outer" />
-          {graph.edges.map((edge) => {
-            const from = graph.nodes.find((node) => node.id === edge.from);
-            const to = graph.nodes.find((node) => node.id === edge.to);
-            if (!from || !to) return null;
-            const dx = to.x - from.x; const dy = to.y - from.y; const length = Math.hypot(dx, dy) || 1;
-            return <line key={`${edge.from}-${edge.to}`} className="map-edge" x1={from.x} y1={from.y}
-              x2={to.x - dx / length * 29} y2={to.y - dy / length * 29} markerEnd="url(#follow-arrow)" />;
-          })}
-          {graph.nodes.map((node) => <g key={node.id} className={`map-node map-node-${node.distance}`}>
-            <circle cx={node.x} cy={node.y} r="27" />
-            <text className="map-initial" x={node.x} y={node.y + 5} textAnchor="middle">{node.username.slice(0, 1).toUpperCase()}</text>
-            <text className="map-name" x={node.x} y={node.y + 46} textAnchor="middle">@{node.username}</text>
-          </g>)}
-        </svg>
+        <p>Explora a quién sigues y descubre las personas a las que puedes llegar a través de tu círculo. Las flechas muestran la dirección del seguimiento.</p></div>
+        <span className="network-map-total">{direct.length + second.length} personas en tu red</span>
       </div>
-      <div className="network-map-footer"><span>{direct.length} en tu círculo</span><span>{second.length} personas a dos pasos</span></div>
+      <div className="network-map-key"><span><i className="key-self" /> Tú</span><span><i className="key-direct" /> Sigues</span><span><i className="key-second" /> A dos pasos</span><small>Selecciona un punto para ver la conexión</small></div>
+      <div className="network-map-shell">
+        <div className="network-map-canvas" role="region" aria-label={`Gráfica de ${graph.nodes.length} personas y ${graph.edges.length} relaciones`} tabIndex="0">
+          <svg viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} aria-label="Mapa interactivo de tu red">
+            <defs>
+              <marker id="follow-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#8e85b9" /></marker>
+              <marker id="follow-arrow-active" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#d8b5ff" /></marker>
+            </defs>
+            <circle cx="450" cy="340" r="176" className="map-ring" /><circle cx="450" cy="340" r="284" className="map-ring map-ring-outer" />
+            <circle cx="450" cy="340" r="74" className="map-core-glow" />
+            {graph.edges.map((edge) => {
+              const from = graphById.get(edge.from);
+              const to = graphById.get(edge.to);
+              const dx = to.x - from.x; const dy = to.y - from.y; const length = Math.hypot(dx, dy) || 1;
+              const active = highlightedEdges.has(`${edge.from}-${edge.to}`);
+              return <line key={`${edge.from}-${edge.to}`} className={`map-edge ${active ? 'map-edge-active' : ''}`}
+                x1={from.x + dx / length * 31} y1={from.y + dy / length * 31}
+                x2={to.x - dx / length * 36} y2={to.y - dy / length * 36}
+                markerEnd={`url(#follow-arrow${active ? '-active' : ''})`} />;
+            })}
+            {graph.nodes.map((node) => <g key={node.id}
+              className={`map-node map-node-${node.distance} ${selectedPerson.id === node.id ? 'map-node-selected' : ''}`}
+              role="button" tabIndex="0" aria-pressed={selectedPerson.id === node.id}
+              aria-label={`@${node.username}, ${node.distance === 0 ? 'tú' : node.distance === 1 ? 'persona que sigues' : 'a dos pasos'}`}
+              onClick={() => setSelectedNodeId(node.id)}
+              onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedNodeId(node.id); } }}>
+              <title>@{node.username}</title>
+              <circle className="map-node-halo" cx={node.x} cy={node.y} r="34" />
+              <circle className="map-node-disc" cx={node.x} cy={node.y} r="26" />
+              <text className="map-initial" x={node.x} y={node.y + 6} textAnchor="middle">{node.username.slice(0, 1).toUpperCase()}</text>
+              <text className="map-name" x={node.x} y={node.y + 50} textAnchor="middle">@{node.username.length > 13 ? `${node.username.slice(0, 12)}…` : node.username}</text>
+            </g>)}
+          </svg>
+          {!data.reachable.length && <div className="network-map-empty">Tu órbita empieza aquí. Sigue a alguien para verla crecer.</div>}
+          <span className="network-map-pan-hint">Desliza para explorar el mapa</span>
+        </div>
+        <aside className="network-map-explorer" aria-label="Explorador del mapa">
+          <div className="network-map-selected" aria-live="polite">
+            <span className="network-section-kicker"><Sparkles size={15} /> CONEXIÓN SELECCIONADA</span>
+            <Avatar username={selectedPerson.username} avatarUrl={selectedPerson.avatarUrl} className="network-map-selected-avatar" />
+            <strong>@{selectedPerson.username}</strong>
+            <p>{selectedPerson.id === user.id ? 'Este es el centro de tu red.' : selectedPerson.distance === 1
+              ? 'Sigues a esta persona directamente.'
+              : `Llegas a esta persona a través de @${directById.get(selectedPerson.viaId) || 'tu círculo'}.`}</p>
+            {selectedPerson.id !== user.id && <Link to={`/users/${selectedPerson.id}`}>Visitar perfil <ArrowRight size={16} /></Link>}
+          </div>
+          <div className="network-map-directory">
+            <div className="network-map-directory-heading"><strong>Personas en tu red</strong><span>{data.reachable.length}</span></div>
+            <label className="network-map-search"><Search size={17} /><span className="sr-only">Buscar persona en el mapa</span>
+              <input type="search" value={mapQuery} onChange={(event) => setMapQuery(event.target.value)} placeholder="Buscar por usuario" /></label>
+            <div className="network-map-person-list">
+              {visibleMapPeople.map((person) => <button type="button" key={person.id}
+                className={selectedPerson.id === person.id ? 'active' : ''}
+                onClick={() => setSelectedNodeId(person.id)}>
+                <Avatar username={person.username} tone={person.distance} />
+                <span><strong>@{person.username}</strong><small>{person.distance === 1 ? 'Sigues' : `Vía @${directById.get(person.viaId) || 'tu círculo'}`}</small></span>
+                <ArrowRight size={16} />
+              </button>)}
+              {!visibleMapPeople.length && <p className="network-map-list-empty">{mapQuery ? 'No encontramos personas con ese usuario.' : 'Todavía no hay personas en tu red.'}</p>}
+            </div>
+          </div>
+        </aside>
+      </div>
+      <div className="network-map-footer"><span>{direct.length} en tu círculo</span><span>{second.length} a dos pasos</span>
+        {graph.hiddenCount > 0 && <span>El mapa muestra una selección clara; busca cualquiera de las {graph.hiddenCount} personas restantes a la derecha.</span>}</div>
     </section>}
   </section>;
 }

@@ -3,7 +3,7 @@ package com.redsocial.post;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.time.Instant;
-import java.util.List;
+import java.util.Map;
 
 /**
  * Domain model for a social-network post.
@@ -55,7 +55,13 @@ public record Post(
             String id,
             String authorId,
             String authorUsername,
+            String authorAvatarUrl,
             String text,
-            Instant createdAt
+            String mediaKey,
+            String mediaType,
+            long mediaSize,
+            Instant createdAt,
+            Map<String, Long> reactions,
+            String myReaction
     ) {}
 }

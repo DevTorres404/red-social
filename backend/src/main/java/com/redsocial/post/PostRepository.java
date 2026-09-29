@@ -7,6 +7,7 @@ import org.neo4j.driver.Driver;
 import org.neo4j.driver.types.Node;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -166,32 +167,65 @@ public class PostRepository {
     }
 
     /** Comments for a post, oldest first. */
-    public List<Post.Comment> findComments(String postId) {
+    public List<Post.Comment> findComments(String postId, String viewerId) {
         try (var session = driver.session()) {
             return session.executeRead(tx -> {
                 var result = tx.run("""
                         MATCH (p:Post {id: $postId})-[:TIENE_COMENTARIO]->(c:Comentario)
                         MATCH (author:Usuario)-[:COMENTO]->(c)
+                        OPTIONAL MATCH (reaction:CommentReaction)-[:SOBRE_COMENTARIO]->(c)
+                        WITH c, author, collect(reaction.emoji) AS emojis,
+                             head(collect(CASE WHEN reaction.id = $viewerReactionPrefix + c.id
+                                 THEN reaction.emoji END)) AS myReaction
                         RETURN c,
                                author.id       AS authorId,
-                               author.username AS authorUsername
-                        ORDER BY c.createdAt ASC
+                               author.username AS authorUsername,
+                               author.avatarUrl AS authorAvatarUrl,
+                               emojis, myReaction
+                        ORDER BY c.createdAt ASC, c.id ASC
                         LIMIT 200
                         """,
-                        Map.of("postId", postId)
+                        Map.of("postId", postId, "viewerReactionPrefix", viewerId + "|")
                 );
                 return result.list(row -> mapComment(
                         row.get("c").asNode(),
                         row.get("authorId").asString(),
-                        row.get("authorUsername").asString()
+                        row.get("authorUsername").asString(),
+                        row.get("authorAvatarUrl").asString(""),
+                        row.get("emojis").asList(value -> value.asString()),
+                        row.get("myReaction").asString("")
                 ));
+            });
+        }
+    }
+
+    public Post.Comment findComment(String postId, String commentId, String viewerId) {
+        try (var session = driver.session()) {
+            return session.executeRead(tx -> {
+                var result = tx.run("""
+                        MATCH (p:Post {id: $postId})-[:TIENE_COMENTARIO]->(c:Comentario {id: $commentId})
+                        MATCH (author:Usuario)-[:COMENTO]->(c)
+                        OPTIONAL MATCH (reaction:CommentReaction)-[:SOBRE_COMENTARIO]->(c)
+                        WITH c, author, collect(reaction.emoji) AS emojis,
+                             head(collect(CASE WHEN reaction.id = $viewerReactionPrefix + c.id
+                                 THEN reaction.emoji END)) AS myReaction
+                        RETURN c, author.id AS authorId, author.username AS authorUsername,
+                               author.avatarUrl AS authorAvatarUrl, emojis, myReaction
+                        """, Map.of("postId", postId, "commentId", commentId,
+                                "viewerReactionPrefix", viewerId + "|"));
+                if (!result.hasNext()) throw new NotFoundException("Comment not found: " + commentId);
+                var row = result.single();
+                return mapComment(row.get("c").asNode(), row.get("authorId").asString(),
+                        row.get("authorUsername").asString(), row.get("authorAvatarUrl").asString(""),
+                        row.get("emojis").asList(value -> value.asString()),
+                        row.get("myReaction").asString(""));
             });
         }
     }
 
     // ── Delete ────────────────────────────────────────────────────────────────
 
-    public String delete(String postId, String requestingUserId) {
+    public List<String> delete(String postId, String requestingUserId) {
         try (var session = driver.session()) {
             return session.executeWrite(tx -> {
                 // Only the author can delete their post
@@ -199,23 +233,29 @@ public class PostRepository {
                         MATCH (author:Usuario {id: $userId})-[:PUBLICO]->(p:Post {id: $postId})
                         OPTIONAL MATCH (p)-[:TIENE_COMENTARIO]->(c:Comentario)
                         WITH p, collect(DISTINCT c) AS comments
+                        OPTIONAL MATCH (reaction:CommentReaction)-[:SOBRE_COMENTARIO]->(:Comentario)<-[:TIENE_COMENTARIO]-(p)
+                        WITH p, comments, collect(DISTINCT reaction) AS reactions
                         OPTIONAL MATCH (n:Notificacion)-[:SOBRE]->(p)
-                        WITH p, comments, collect(DISTINCT n) AS notifications
-                        WITH p, comments, notifications, coalesce(p.mediaKey, '') AS mediaKey
-                        FOREACH (key IN CASE WHEN mediaKey = '' THEN [] ELSE [mediaKey] END |
+                        WITH p, comments, reactions, collect(DISTINCT n) AS notifications,
+                             [c IN comments WHERE coalesce(c.mediaKey, '') <> '' | c.mediaKey] AS commentMediaKeys,
+                             coalesce(p.mediaKey, '') AS mediaKey
+                        WITH p, comments, reactions, notifications,
+                             commentMediaKeys + CASE WHEN mediaKey = '' THEN [] ELSE [mediaKey] END AS mediaKeys
+                        FOREACH (key IN mediaKeys |
                             MERGE (cleanup:MediaCleanup {key: key})
                             ON CREATE SET cleanup.createdAt = $now)
+                        FOREACH (reaction IN reactions | DETACH DELETE reaction)
                         FOREACH (comment IN comments | DETACH DELETE comment)
                         FOREACH (notification IN notifications | DETACH DELETE notification)
                         DETACH DELETE p
-                        RETURN mediaKey
+                        RETURN mediaKeys
                         """,
                         Map.of("postId", postId, "userId", requestingUserId, "now", Instant.now().toString())
                 );
                 if (!result.hasNext()) {
                     throw new NotFoundException("Post not found or not owned by user");
                 }
-                return result.single().get("mediaKey").asString();
+                return result.single().get("mediaKeys").asList(value -> value.asString());
             });
         }
     }
@@ -312,9 +352,12 @@ public class PostRepository {
 
     // ── Comments ──────────────────────────────────────────────────────────────
 
-    public Post.Comment addComment(String postId, String authorId, String text) {
+    public Post.Comment addComment(String postId, String authorId, String text, MediaAsset media) {
         String commentId = UUID.randomUUID().toString();
         Instant now = Instant.now();
+        String mediaKey = media == null ? "" : media.key();
+        String mediaType = media == null ? "" : media.contentType();
+        long mediaSize = media == null ? 0 : media.size();
 
         try (var session = driver.session()) {
             return session.executeWrite(tx -> {
@@ -323,19 +366,26 @@ public class PostRepository {
                         CREATE (c:Comentario {
                             id:        $commentId,
                             text:      $text,
+                            mediaKey:  $mediaKey,
+                            mediaType: $mediaType,
+                            mediaSize: $mediaSize,
                             createdAt: $createdAt
                         })
                         CREATE (p)-[:TIENE_COMENTARIO]->(c)
                         CREATE (author)-[:COMENTO]->(c)
                         RETURN c,
                                author.id       AS authorId,
-                               author.username AS authorUsername
+                               author.username AS authorUsername,
+                               author.avatarUrl AS authorAvatarUrl
                         """,
                         Map.of(
                                 "postId", postId,
                                 "authorId", authorId,
                                 "commentId", commentId,
                                 "text", text,
+                                 "mediaKey", mediaKey,
+                                 "mediaType", mediaType,
+                                 "mediaSize", mediaSize,
                                 "createdAt", now.toString()
                         )
                 );
@@ -345,7 +395,46 @@ public class PostRepository {
                 var row = result.single();
                 return mapComment(row.get("c").asNode(),
                         row.get("authorId").asString(),
-                        row.get("authorUsername").asString());
+                        row.get("authorUsername").asString(),
+                        row.get("authorAvatarUrl").asString(""), List.of(), "");
+            });
+        }
+    }
+
+    public void setCommentReaction(String postId, String commentId, String userId, String emoji) {
+        try (var session = driver.session()) {
+            session.executeWrite(tx -> {
+                var result = tx.run("""
+                        MATCH (p:Post {id: $postId})-[:TIENE_COMENTARIO]->(c:Comentario {id: $commentId})
+                        MATCH (actor:Usuario {id: $userId})
+                        MERGE (reaction:CommentReaction {id: $reactionId})
+                        SET reaction.emoji = $emoji
+                        MERGE (actor)-[:REACCIONO]->(reaction)
+                        MERGE (reaction)-[:SOBRE_COMENTARIO]->(c)
+                        RETURN reaction.id AS id
+                        """, Map.of("postId", postId, "commentId", commentId, "userId", userId,
+                                "reactionId", userId + "|" + commentId, "emoji", emoji));
+                if (!result.hasNext()) throw new NotFoundException("Comment not found: " + commentId);
+                result.consume();
+                return null;
+            });
+        }
+    }
+
+    public void removeCommentReaction(String postId, String commentId, String userId) {
+        try (var session = driver.session()) {
+            session.executeWrite(tx -> {
+                var result = tx.run("""
+                        MATCH (:Post {id: $postId})-[:TIENE_COMENTARIO]->(c:Comentario {id: $commentId})
+                        RETURN c.id AS id
+                        """, Map.of("postId", postId, "commentId", commentId));
+                if (!result.hasNext()) throw new NotFoundException("Comment not found: " + commentId);
+                result.consume();
+                tx.run("""
+                        MATCH (reaction:CommentReaction {id: $reactionId})-[:SOBRE_COMENTARIO]->(:Comentario {id: $commentId})
+                        DETACH DELETE reaction
+                        """, Map.of("reactionId", userId + "|" + commentId, "commentId", commentId)).consume();
+                return null;
             });
         }
     }
@@ -370,13 +459,22 @@ public class PostRepository {
         );
     }
 
-    private Post.Comment mapComment(Node node, String authorId, String authorUsername) {
+    private Post.Comment mapComment(Node node, String authorId, String authorUsername,
+                                    String authorAvatarUrl, List<String> emojis, String myReaction) {
+        Map<String, Long> reactions = new LinkedHashMap<>();
+        emojis.forEach(emoji -> reactions.merge(emoji, 1L, Long::sum));
         return new Post.Comment(
                 node.get("id").asString(),
                 authorId,
                 authorUsername,
-                node.get("text").asString(),
-                Instant.parse(node.get("createdAt").asString())
+                authorAvatarUrl,
+                node.get("text").asString(""),
+                node.get("mediaKey").asString(""),
+                node.get("mediaType").asString(""),
+                node.get("mediaSize").asLong(0),
+                Instant.parse(node.get("createdAt").asString()),
+                reactions,
+                myReaction
         );
     }
 }

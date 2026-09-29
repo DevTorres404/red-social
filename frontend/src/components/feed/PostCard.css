@@ -37,6 +37,7 @@
   align-items: center;
   gap: 12px;
 }
+.post-card-author:hover .post-card-author-name { color: #7654bc; text-decoration: underline; }
 
 .post-card-avatar {
   width: 40px;

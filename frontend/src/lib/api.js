@@ -188,6 +188,15 @@ export const postsApi = {
   unlike:         (id) => api.del(`/posts/${id}/like`),
   getComments:    (id) => api.get(`/posts/${id}/comments`),
   addComment:     (id, text) => api.post(`/posts/${id}/comments`, { text }),
+  addCommentWithImage: (id, text, file) => {
+    const form = new FormData();
+    form.append('text', text);
+    form.append('image', file);
+    return api.postForm(`/posts/${id}/comments/with-image`, form);
+  },
+  commentMediaUrl: (postId, commentId) => api.get(`/posts/${postId}/comments/${commentId}/media-url`),
+  reactToComment: (postId, commentId, emoji) => api.put(`/posts/${postId}/comments/${commentId}/reaction`, { emoji }),
+  removeCommentReaction: (postId, commentId) => api.del(`/posts/${postId}/comments/${commentId}/reaction`),
 };
 
 export const feedApi = {

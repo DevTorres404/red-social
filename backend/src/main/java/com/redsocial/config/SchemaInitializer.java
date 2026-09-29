@@ -61,6 +61,9 @@ public class SchemaInitializer {
                 tx.run("CREATE CONSTRAINT comentario_id IF NOT EXISTS " +
                        "FOR (c:Comentario) REQUIRE c.id IS UNIQUE");
 
+                tx.run("CREATE CONSTRAINT comment_reaction_id IF NOT EXISTS " +
+                       "FOR (r:CommentReaction) REQUIRE r.id IS UNIQUE");
+
                 tx.run("CREATE CONSTRAINT mensaje_id IF NOT EXISTS " +
                        "FOR (m:Mensaje) REQUIRE m.id IS UNIQUE");
 
