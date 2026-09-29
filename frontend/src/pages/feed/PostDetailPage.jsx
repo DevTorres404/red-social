@@ -22,6 +22,7 @@ function CommentImage({ postId, comment }) {
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
+  const [imageRetries, setImageRetries] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -31,10 +32,24 @@ function CommentImage({ postId, comment }) {
     return () => { active = false; };
   }, [postId, comment.id, attempt]);
 
-  if (error) return <button type="button" className="comment-image-retry" onClick={() => { setError(''); setAttempt((value) => value + 1); }}>Reintentar imagen</button>;
+  const handleImageError = () => {
+    if (imageRetries < 3) {
+      setTimeout(() => {
+        setImageRetries(prev => prev + 1);
+        setUrl(prev => {
+          const separator = prev.includes('?') ? '&' : '?';
+          return `${prev.split('&_retry=')[0]}${separator}_retry=${Date.now()}`;
+        });
+      }, 1000);
+    } else {
+      setError('La imagen no está disponible o su enlace expiró.');
+    }
+  };
+
+  if (error) return <button type="button" className="comment-image-retry" onClick={() => { setError(''); setImageRetries(0); setAttempt((value) => value + 1); }}>Reintentar imagen</button>;
   if (!url) return <div className="comment-image-loading" role="status">Cargando imagen...</div>;
   return <img className="comment-image" src={url} alt={`Imagen del comentario de @${comment.authorUsername}`}
-    onError={() => setError('La imagen no está disponible o su enlace expiró.')} />;
+    onError={handleImageError} />;
 }
 
 export default function PostDetailPage() {
