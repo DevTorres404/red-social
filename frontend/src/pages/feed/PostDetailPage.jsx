@@ -10,7 +10,7 @@ import PostCard from '../../components/feed/PostCard';
 import './PostDetailPage.css';
 
 const EMOJIS = ['❤️', '😂', '😍', '😮', '😢', '👏'];
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
 
 function relativeDate(value) {
   if (!value) return '';
@@ -107,7 +107,7 @@ export default function PostDetailPage() {
       return;
     }
     if (!file.size || file.size > MAX_IMAGE_BYTES) {
-      setFormError('La imagen debe pesar como máximo 5 MiB.');
+      setFormError('La imagen debe pesar como máximo 6 MB.');
       event.target.value = '';
       return;
     }

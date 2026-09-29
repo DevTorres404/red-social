@@ -12,7 +12,7 @@ import './ProfilePage.css';
 
 const toneBackgrounds = ['#e6e0ff', '#f7def4', '#dde8ff', '#e7dcfa'];
 const toneColors = ['#5a45ac', '#9d4e9a', '#4a64ae', '#7854a9'];
-const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
+const MAX_AVATAR_BYTES = 6 * 1024 * 1024;
 const EMPTY_CONNECTIONS = { users: [], total: 0, page: 0, size: 4 };
 
 function Avatar({ username, avatarUrl, tone = 0, className = '', size = 'md' }) {
@@ -116,7 +116,7 @@ export default function ProfilePage() {
       || (file.type === 'image/jpeg' && (extension.endsWith('.jpg') || extension.endsWith('.jpeg')));
       
     if (!validType || file.size === 0 || file.size > MAX_AVATAR_BYTES) {
-      setAvatarError('Elige una imagen PNG o JPG de hasta 5 MB.');
+      setAvatarError('Elige una imagen PNG o JPG de hasta 6 MB.');
       return;
     }
     

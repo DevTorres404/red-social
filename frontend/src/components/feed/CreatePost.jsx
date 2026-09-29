@@ -21,6 +21,11 @@ export default function CreatePost({ onPostCreated }) {
   }, []);
 
   const chooseFile = (selected) => {
+    if (selected && selected.size > 6 * 1024 * 1024) {
+      setError('La imagen debe pesar como máximo 6 MB.');
+      if (fileInput.current) fileInput.current.value = '';
+      return;
+    }
     if (previewRef.current) URL.revokeObjectURL(previewRef.current);
     previewRef.current = selected ? URL.createObjectURL(selected) : '';
     setPreview(previewRef.current);
