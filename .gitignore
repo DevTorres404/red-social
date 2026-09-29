@@ -96,3 +96,5 @@ secrets/*
 vapid-private.key
 *.vapid.key
 *.vapid.pem
+.codegraph
+comando.md
