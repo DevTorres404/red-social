@@ -34,28 +34,30 @@ La arquitectura demuestra el uso consciente de cada mecanismo propio de sistemas
 ### Diagrama de alto nivel
 
 ```mermaid
-architecture-beta
-    group browser(cloud)[Navegador del Usuario]
-    group infra(cloud)[Infraestructura Docker]
+graph TD
+    subgraph Browser [Navegador del Usuario]
+        react[React + Vite<br/>Frontend SPA]
+        sw[Service Worker<br/>Web Push]
+    end
 
-    service react(component)[React + Vite\nFrontend SPA] in browser
-    service sw(component)[Service Worker\nWeb Push] in browser
+    subgraph Infra [Infraestructura Docker]
+        nginx[Nginx<br/>Reverse Proxy + SPA]
+        quarkus[Quarkus 3 + Java 21<br/>Backend API]
+        neo4j[(Neo4j 5.26<br/>Base de Datos de Grafos)]
+        rustfs[(RustFS<br/>Object Storage S3)]
+    end
 
-    service nginx(component)[Nginx\nReverse Proxy + SPA] in infra
-    service quarkus(component)[Quarkus 3 + Java 21\nBackend API] in infra
-    service neo4j(database)[Neo4j 5.26\nBase de Datos de Grafos] in infra
-    service rustfs(database)[RustFS\nObject Storage S3] in infra
-
-    react --> nginx: HTTPS/REST/WebSocket
-    sw --> rustfs: Push Service (FCM/APNS/etc)
+    react -- "HTTPS / REST / WebSocket" --> nginx
+    sw -. "Push Service (FCM/APNS)" .-> browser_push((Cloud Push))
     
-    nginx --> quarkus: /api (REST)
-    nginx --> quarkus: /ws/chat, /ws/feed (WebSocket)
+    nginx -- "/api (REST)" --> quarkus
+    nginx -- "/ws/* (WebSocket)" --> quarkus
     
-    quarkus --> neo4j: Cypher (Bolt 7687)
-    quarkus --> rustfs: S3 API (9000)
+    quarkus -- "Cypher (Bolt 7687)" --> neo4j
+    quarkus -- "S3 API (9000)" --> rustfs
     
-    quarkus -.-> sw: Web Push (VAPID)
+    quarkus -. "Web Push (VAPID)" .-> browser_push
+    browser_push -.-> sw
 ```
 
 ### Flujo de datos principal
