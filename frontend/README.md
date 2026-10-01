@@ -1,4 +1,14 @@
-# React + Vite
+# Frontend - Orbit (Red Social Distribuida)
+
+Este es el repositorio del frontend para el proyecto Orbit, desarrollado con React y Vite.
+
+## Integrantes
+* **Melanie Tomala** - QA y QC
+* **Jean Cedeño** - Frontend
+
+---
+
+## React + Vite (Configuración base)
 
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 
