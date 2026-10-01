@@ -30,6 +30,7 @@ function ChatConversation({ userId, navigate }) {
   const {
     user,
     isOnline,
+    partners,
     other,
     messages,
     draft,
