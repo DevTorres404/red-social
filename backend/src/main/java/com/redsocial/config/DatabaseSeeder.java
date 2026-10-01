@@ -76,7 +76,9 @@ public class DatabaseSeeder {
     static {
         DEMO_PASSWORDS.put("admin", "admin123");
         String[] nombres = {
-            "jean", "melanie", "damian"
+            "andy", "skay", "ismael", "luis", "gino", "jean", "oscar", "estalin",
+            "paulo", "peter", "anthony", "carlos", "said", "jose", "dayron",
+            "alisson", "yandris", "melanie", "amy", "damian", "angel"
         };
         for (String nombre : nombres) {
             DEMO_PASSWORDS.put(nombre, nombre + "123");
@@ -239,9 +241,18 @@ public class DatabaseSeeder {
 
         // ── Seguimientos ─────────────────────────────────────────────────────
         String[][] follows = {
+            {"damian", "ismael"}, {"damian", "andy"}, {"damian", "luis"},
+            {"ismael", "damian"}, {"ismael", "jean"}, {"ismael", "oscar"},
+            {"skay", "damian"}, {"skay", "peter"}, {"skay", "melanie"},
+            {"andy", "gino"}, {"andy", "estalin"}, {"andy", "damian"},
+            {"luis", "jose"}, {"luis", "dayron"},
+            {"gino", "damian"}, {"gino", "paulo"},
+            {"jean", "carlos"}, {"jean", "said"},
+            {"melanie", "amy"}, {"melanie", "skay"},
+            {"carlos", "angel"}, {"carlos", "jean"},
+            {"peter", "alisson"}, {"peter", "skay"},
             {"damian", "jean"}, {"damian", "melanie"},
-            {"jean", "damian"}, {"jean", "melanie"},
-            {"melanie", "damian"}, {"melanie", "jean"}
+            {"jean", "damian"}, {"melanie", "damian"}
         };
 
         for (String[] pair : follows) {
