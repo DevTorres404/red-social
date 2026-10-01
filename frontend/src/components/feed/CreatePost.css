@@ -41,7 +41,14 @@
   justify-content: center;
   flex-shrink: 0;
   overflow: hidden;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition: box-shadow .2s ease, transform .2s ease;
 }
+
+.create-post-avatar:hover { transform: scale(1.04); box-shadow: 0 0 0 3px rgba(117, 87, 194, .2); }
+.create-post-avatar:focus-visible { outline: 3px solid #805dc5; outline-offset: 3px; }
 
 .create-post-avatar img {
   width: 100%;

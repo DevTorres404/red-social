@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Send, Image as ImageIcon, X } from 'lucide-react';
 import { postsApi } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
+import { Link } from 'react-router-dom';
 import './CreatePost.css';
 
 export default function CreatePost({ onPostCreated }) {
@@ -66,13 +67,17 @@ export default function CreatePost({ onPostCreated }) {
     >
       <form onSubmit={handleSubmit}>
         <div className="create-post-header">
-          <div className="create-post-avatar">
+          <Link
+            to={`/users/${user?.id}`}
+            className="create-post-avatar"
+            aria-label="Ir a mi perfil"
+          >
             {user?.avatarUrl ? (
               <img src={user.avatarUrl} alt={user.username} />
             ) : (
               <span>{user?.username?.charAt(0).toUpperCase()}</span>
             )}
-          </div>
+          </Link>
           
           <div className="create-post-body">
             <textarea
