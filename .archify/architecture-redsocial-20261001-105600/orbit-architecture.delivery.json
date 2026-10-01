@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "9ef034e7-b30c-435c-978f-990376ccc085",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "C:\\Users\\Damian\\Documents\\SISTEMAS DISTRIBUIDOS Y CLOUD COMPUTING\\red-social\\.archify\\architecture-redsocial-20261001-105600\\candidate.json",
+  "output": "C:\\Users\\Damian\\Documents\\SISTEMAS DISTRIBUIDOS Y CLOUD COMPUTING\\red-social\\.archify\\architecture-redsocial-20261001-105600\\orbit-architecture.html",
+  "specification": {
+    "sha256": "ccbe3af1d22af788f4eecb192274506d0513434789741ddf7a9691a806b04718",
+    "bytes": 3497
+  },
+  "artifact": {
+    "sha256": "8c9dba7da76fa8bc9955ddd82d2a3c7a29acd65a5e611ece1c371a4fe9383a44",
+    "bytes": 757249
+  }
+}

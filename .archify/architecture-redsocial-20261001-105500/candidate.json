@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Orbit Architecture",
+    "output": "orbit-architecture.html",
+    "quality_profile": "showcase",
+    "animation": "trace",
+    "views": [
+      {
+        "id": "view-frontend",
+        "label": "Frontend & Proxy",
+        "focus": ["react", "sw", "nginx"],
+        "note": "El navegador carga la SPA en React y registra el Service Worker."
+      },
+      {
+        "id": "view-realtime",
+        "label": "Tiempo Real",
+        "focus": ["react", "nginx", "quarkus", "react-nginx", "nginx-quarkus-ws"],
+        "note": "WebSockets a través de Nginx hacia Quarkus para chat en vivo y feed."
+      },
+      {
+        "id": "view-data",
+        "label": "Persistencia",
+        "focus": ["quarkus", "neo4j", "rustfs", "quarkus-neo4j", "quarkus-rustfs"],
+        "note": "Grafo social en Neo4j, binarios en RustFS (S3-compatible)."
+      },
+      {
+        "id": "view-push",
+        "label": "Push Flow",
+        "focus": ["quarkus", "push", "sw", "quarkus-push", "push-sw"],
+        "note": "Quarkus dispara notificaciones vía VAPID a la nube, despertando al Service Worker."
+      }
+    ]
+  },
+  "components": [
+    { "id": "react", "type": "external", "label": "React + Vite", "sublabel": "Frontend SPA", "pos": [40, 200], "size": [140, 60] },
+    { "id": "sw", "type": "external", "label": "Service Worker", "sublabel": "Web Push", "pos": [40, 400], "size": [140, 60] },
+    { "id": "push", "type": "cloud", "label": "FCM/APNS", "sublabel": "Cloud Push", "pos": [250, 400], "size": [140, 60] },
+    { "id": "nginx", "type": "backend", "label": "Nginx", "sublabel": "Reverse Proxy", "pos": [250, 200], "size": [140, 60] },
+    { "id": "quarkus", "type": "backend", "label": "Quarkus", "sublabel": "Backend API", "pos": [460, 200], "size": [140, 60], "tag": "Java 21" },
+    { "id": "neo4j", "type": "database", "label": "Neo4j", "sublabel": "Graph DB", "pos": [670, 100], "size": [140, 60] },
+    { "id": "rustfs", "type": "database", "label": "RustFS", "sublabel": "S3 Storage", "pos": [670, 300], "size": [140, 60] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Navegador del Usuario", "wraps": ["react", "sw"] },
+    { "kind": "security-group", "label": "Infraestructura Docker", "wraps": ["nginx", "quarkus", "neo4j", "rustfs"] }
+  ],
+  "connections": [
+    { "id": "react-nginx", "from": "react", "to": "nginx", "label": "HTTPS/WS", "variant": "emphasis" },
+    { "id": "nginx-quarkus-rest", "from": "nginx", "to": "quarkus", "label": "REST /api" },
+    { "id": "nginx-quarkus-ws", "from": "nginx", "to": "quarkus", "label": "WebSocket", "variant": "dashed", "fromSide": "bottom", "toSide": "bottom", "via": [[320, 280], [530, 280]] },
+    { "id": "quarkus-neo4j", "from": "quarkus", "to": "neo4j", "label": "Cypher (Bolt)" },
+    { "id": "quarkus-rustfs", "from": "quarkus", "to": "rustfs", "label": "S3 API" },
+    { "id": "quarkus-push", "from": "quarkus", "to": "push", "label": "VAPID", "variant": "dashed", "fromSide": "bottom", "toSide": "right", "via": [[530, 430]] },
+    { "id": "push-sw", "from": "push", "to": "sw", "label": "Push Event", "variant": "dashed" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Real-time", "items": ["WebSockets used for Chat and Live Feed", "Service Worker processes Web Push notifications"] },
+    { "dot": "emerald", "title": "Data", "items": ["Neo4j handles social graph and real-time streams", "RustFS for S3-compatible binary assets"] }
+  ]
+}

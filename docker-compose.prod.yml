@@ -105,7 +105,7 @@ services:
       APP_VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:?Generate VAPID keys in .env}
       APP_VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:?Generate VAPID keys in .env}
       APP_VAPID_SUBJECT: ${VAPID_SUBJECT:?Set VAPID_SUBJECT in .env}
-      APP_SEED_ENABLED: "false"
+      APP_SEED_ENABLED: "true"
       APP_SEED_FORCE: "false"
     depends_on:
       neo4j:
