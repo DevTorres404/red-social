@@ -76,9 +76,7 @@ public class DatabaseSeeder {
     static {
         DEMO_PASSWORDS.put("admin", "admin123");
         String[] nombres = {
-            "andy", "skay", "ismael", "luis", "gino", "jean", "oscar", "estalin",
-            "paulo", "peter", "anthony", "carlos", "said", "jose", "dayron",
-            "alisson", "yandris", "melanie", "amy", "damian", "angel"
+            "jean", "melanie", "damian"
         };
         for (String nombre : nombres) {
             DEMO_PASSWORDS.put(nombre, nombre + "123");
@@ -212,7 +210,7 @@ public class DatabaseSeeder {
         // así el hilo sembrado y el hilo creado en runtime son el mismo nodo.
         String conversacionId = ConversationId.of(
                 requireStr(params, "damianId"),
-                requireStr(params, "ismaelId"));
+                requireStr(params, "jeanId"));
         params.put("conversacionId", conversacionId);
 
         // ── Usuarios ─────────────────────────────────────────────────────────
@@ -241,16 +239,9 @@ public class DatabaseSeeder {
 
         // ── Seguimientos ─────────────────────────────────────────────────────
         String[][] follows = {
-            {"damian", "ismael"}, {"damian", "andy"}, {"damian", "luis"},
-            {"ismael", "damian"}, {"ismael", "jean"}, {"ismael", "oscar"},
-            {"skay", "damian"}, {"skay", "peter"}, {"skay", "melanie"},
-            {"andy", "gino"}, {"andy", "estalin"}, {"andy", "damian"},
-            {"luis", "jose"}, {"luis", "dayron"},
-            {"gino", "damian"}, {"gino", "paulo"},
-            {"jean", "carlos"}, {"jean", "said"},
-            {"melanie", "amy"}, {"melanie", "skay"},
-            {"carlos", "angel"}, {"carlos", "jean"},
-            {"peter", "alisson"}, {"peter", "skay"}
+            {"damian", "jean"}, {"damian", "melanie"},
+            {"jean", "damian"}, {"jean", "melanie"},
+            {"melanie", "damian"}, {"melanie", "jean"}
         };
 
         for (String[] pair : follows) {
@@ -265,11 +256,11 @@ public class DatabaseSeeder {
 
         // ── Publicaciones y likes ────────────────────────────────────────────
         runChecked(tx, params, "publicaciones+likes",
-                Set.of("skayId", "damianId", "ismaelId", "p1Id", "p2Id", "p3Id", "now"),
+                Set.of("melanieId", "damianId", "jeanId", "p1Id", "p2Id", "p3Id", "now"),
                 """
-                MATCH (skay:Usuario {id: $skayId}),
+                MATCH (melanie:Usuario {id: $melanieId}),
                       (damian:Usuario {id: $damianId}),
-                      (ismael:Usuario  {id: $ismaelId})
+                      (jean:Usuario  {id: $jeanId})
                 CREATE (p1:Post {
                     id: $p1Id,
                     content: 'Bienvenidos a la red social! Esta plataforma fue construida con Neo4j, Quarkus y React.',
@@ -288,25 +279,25 @@ public class DatabaseSeeder {
 
                 // OJO: [:PUBLICO], no [:PUBLICA] — PUBLICA es palabra reservada
                 // en Cypher y el query no compila.
-                CREATE (skay)-[:PUBLICO]->(p1)
+                CREATE (melanie)-[:PUBLICO]->(p1)
                 CREATE (damian)-[:PUBLICO]->(p2)
-                CREATE (ismael)-[:PUBLICO]->(p3)
+                CREATE (jean)-[:PUBLICO]->(p3)
 
                 CREATE (damian)-[:LE_GUSTA]->(p1)
-                CREATE (ismael)-[:LE_GUSTA]->(p1)
-                CREATE (ismael)-[:LE_GUSTA]->(p2)
-                CREATE (skay)-[:LE_GUSTA]->(p3)
+                CREATE (jean)-[:LE_GUSTA]->(p1)
+                CREATE (jean)-[:LE_GUSTA]->(p2)
+                CREATE (melanie)-[:LE_GUSTA]->(p3)
                 """);
         completedSteps.add("publicaciones+likes");
 
         // ── Comentarios ──────────────────────────────────────────────────────
         runChecked(tx, params, "comentarios",
-                Set.of("p1Id", "p2Id", "damianId", "ismaelId", "c1Id", "c2Id", "now"),
+                Set.of("p1Id", "p2Id", "damianId", "jeanId", "c1Id", "c2Id", "now"),
                 """
                 MATCH (p1:Post   {id: $p1Id}),
                       (p2:Post   {id: $p2Id}),
                       (damian:Usuario {id: $damianId}),
-                      (ismael:Usuario   {id: $ismaelId})
+                      (jean:Usuario   {id: $jeanId})
                 CREATE (c1:Comentario {
                     id: $c1Id, text: 'Excelente post! Muy bienvenido.',
                     createdAt: $now
@@ -318,21 +309,21 @@ public class DatabaseSeeder {
                 CREATE (p1)-[:TIENE_COMENTARIO]->(c1)
                 CREATE (p2)-[:TIENE_COMENTARIO]->(c2)
                 CREATE (damian)-[:COMENTO]->(c1)
-                CREATE (ismael)-[:COMENTO]->(c2)
+                CREATE (jean)-[:COMENTO]->(c2)
                 """);
         completedSteps.add("comentarios");
 
         // ── Conversación + mensajes ──────────────────────────────────────────
         runChecked(tx, params, "conversacion+mensajes",
-                Set.of("damianId", "ismaelId", "conversacionId", "m1Id", "m2Id", "earlier", "now"),
+                Set.of("damianId", "jeanId", "conversacionId", "m1Id", "m2Id", "earlier", "now"),
                 """
                 MATCH (damian:Usuario {id: $damianId}),
-                      (ismael:Usuario   {id: $ismaelId})
+                      (jean:Usuario   {id: $jeanId})
                 MERGE (c:Conversacion {id: $conversacionId})
                   ON CREATE SET c.createdAt = $earlier
                 SET c.updatedAt = $now
                 MERGE (damian)-[:PARTICIPA]->(c)
-                MERGE (ismael)-[:PARTICIPA]->(c)
+                MERGE (jean)-[:PARTICIPA]->(c)
 
                 CREATE (m1:Mensaje {
                     id: $m1Id, conversacionId: $conversacionId,
@@ -341,10 +332,10 @@ public class DatabaseSeeder {
                 })
                 CREATE (m2:Mensaje {
                     id: $m2Id, conversacionId: $conversacionId,
-                    text: 'Todo bien Ismael, avanzando con los grafos',
+                    text: 'Todo bien Jean, avanzando con los grafos',
                     sentAt: $now, read: false
                 })
-                CREATE (ismael)-[:ENVIO]->(m1)
+                CREATE (jean)-[:ENVIO]->(m1)
                 CREATE (m1)-[:EN_CONVERSACION]->(c)
                 CREATE (damian)-[:ENVIO]->(m2)
                 CREATE (m2)-[:EN_CONVERSACION]->(c)
@@ -353,11 +344,11 @@ public class DatabaseSeeder {
 
         // ── Notificaciones ───────────────────────────────────────────────────
         runChecked(tx, params, "notificaciones",
-                Set.of("skayId", "damianId", "ismaelId", "p1Id", "n1Id", "n2Id", "now"),
+                Set.of("melanieId", "damianId", "jeanId", "p1Id", "n1Id", "n2Id", "now"),
                 """
-                MATCH (skay:Usuario  {id: $skayId}),
+                MATCH (melanie:Usuario  {id: $melanieId}),
                       (damian:Usuario {id: $damianId}),
-                      (ismael:Usuario   {id: $ismaelId}),
+                      (jean:Usuario   {id: $jeanId}),
                       (p1:Post {id: $p1Id})
                 CREATE (n1:Notificacion {
                     id: $n1Id, type: 'LIKE', read: false, createdAt: $now
@@ -365,11 +356,11 @@ public class DatabaseSeeder {
                 CREATE (n2:Notificacion {
                     id: $n2Id, type: 'FOLLOW', read: false, createdAt: $now
                 })
-                CREATE (skay)-[:TIENE]->(n1)
+                CREATE (melanie)-[:TIENE]->(n1)
                 CREATE (n1)-[:GENERADA_POR]->(damian)
                 CREATE (n1)-[:SOBRE]->(p1)
                 CREATE (damian)-[:TIENE]->(n2)
-                CREATE (n2)-[:GENERADA_POR]->(ismael)
+                CREATE (n2)-[:GENERADA_POR]->(jean)
                 """);
         completedSteps.add("notificaciones");
 
