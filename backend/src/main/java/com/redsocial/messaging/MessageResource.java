@@ -1,12 +1,6 @@
 package com.redsocial.messaging;
 
-import com.redsocial.common.CurrentUser;
 import com.redsocial.messaging.dto.SendMessageRequest;
-import com.redsocial.notification.InAppNotificationService;
-import com.redsocial.notification.PushNotificationService;
-import com.redsocial.user.UserRepository;
-import org.eclipse.microprofile.jwt.JsonWebToken;
-import java.time.Instant;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
@@ -33,48 +27,19 @@ import java.util.List;
 @Tag(name = "Messaging")
 public class MessageResource {
 
-    @Inject
-    MessageRepository messageRepository;
-
-    @Inject
-    CurrentUser currentUser;
-
-    @Inject
-    UserRepository users;
-
-    @Inject
-    ChatDelivery delivery;
-
-    @Inject
-    ChatTickets tickets;
-
-    @Inject
-    JsonWebToken jwt;
-
-    @Inject
-    PushNotificationService pushNotifications;
-
-    @Inject
-    InAppNotificationService inAppNotifications;
+    @Inject MessageService service;
 
     @POST
     @Operation(summary = "Send a direct message to another user")
     public Response send(@Valid SendMessageRequest request) {
-        String senderId = currentUser.id();
-        requireMessagingPermission(senderId, request.recipientId());
-        Message message = messageRepository.send(senderId, request.recipientId(), request.text());
-        delivery.publish(message, null);
-        inAppNotifications.onMessageSent(senderId, request.recipientId(), message.id());
-        pushNotifications.onMessageSent(senderId, request.recipientId(), message.id(), message.conversacionId());
-        return Response.status(Response.Status.CREATED).entity(message).build();
+        return Response.status(Response.Status.CREATED).entity(service.send(request)).build();
     }
 
     @GET
     @Path("/conversations")
     @Operation(summary = "List IDs of all users you have conversations with")
     public List<String> getConversationPartners() {
-        String userId = currentUser.id();
-        return messageRepository.getConversationPartners(userId);
+        return service.getConversationPartners();
     }
 
     @GET
@@ -83,12 +48,7 @@ public class MessageResource {
     public List<Message> getConversation(@PathParam("userId") String otherUserId,
                                          @QueryParam("skip") @DefaultValue("0") int skip,
                                          @QueryParam("limit") @DefaultValue("50") int limit) {
-        String myId = currentUser.id();
-        if (skip < 0 || skip > 10_000 || limit < 1 || limit > 100) {
-            throw new BadRequestException("skip must be 0..10000 and limit 1..100");
-        }
-        requireOtherUser(myId, otherUserId);
-        return messageRepository.getConversation(myId, otherUserId, skip, limit);
+        return service.getConversation(otherUserId, skip, limit);
     }
 
     public record TicketRequest(String otherUserId) {}
@@ -98,34 +58,15 @@ public class MessageResource {
     @Path("/ws-ticket")
     @Operation(summary = "Issue a single-use, conversation-bound WebSocket ticket")
     public TicketResponse ticket(TicketRequest request) {
-        String myId = currentUser.id();
-        if (request == null) throw new BadRequestException("Other user is required");
-        requireOtherUser(myId, request.otherUserId());
-        requireMessagingPermission(myId, request.otherUserId());
-        return tickets.issue(myId, request.otherUserId(), Instant.ofEpochSecond(jwt.getExpirationTime()));
-    }
-
-    private void requireMessagingPermission(String senderId, String recipientId) {
-        var recipient = users.findById(recipientId).orElseThrow(() -> new NotFoundException("User not found"));
-        if (recipient.messagesFollowersOnly() && !senderId.equals(recipientId)
-                && !users.isFollowing(senderId, recipientId))
-            throw new ForbiddenException("Solo los seguidores pueden enviar mensajes");
-    }
-
-    private void requireOtherUser(String myId, String otherUserId) {
-        if (otherUserId == null || otherUserId.isBlank() || otherUserId.equals(myId)) {
-            throw new BadRequestException("Choose another user");
-        }
-        users.findById(otherUserId)
-                .orElseThrow(() -> new NotFoundException("User not found: " + otherUserId));
+        var issued = service.ticket(request == null ? null : request.otherUserId());
+        return new TicketResponse(issued.conversationId(), issued.ticket());
     }
 
     @POST
     @Path("/{userId}/read")
     @Operation(summary = "Mark all messages from a user as read")
     public Response markAsRead(@PathParam("userId") String senderId) {
-        String myId = currentUser.id();
-        messageRepository.markAsRead(myId, senderId);
+        service.markAsRead(senderId);
         return Response.noContent().build();
     }
 }

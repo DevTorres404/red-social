@@ -4,6 +4,7 @@ import com.redsocial.auth.dto.AuthResponse;
 import com.redsocial.auth.dto.LoginRequest;
 import com.redsocial.auth.dto.RegisterRequest;
 import com.redsocial.common.ApiError;
+import com.redsocial.common.CurrentUser;
 import com.redsocial.user.User;
 import com.redsocial.user.UserRepository;
 import io.smallrye.jwt.build.Jwt;
@@ -57,6 +58,9 @@ public class AuthService {
     UserRepository userRepository;
 
     @Inject
+    CurrentUser currentUser;
+
+    @Inject
     RefreshTokenRepository refreshTokenRepository;
 
     @ConfigProperty(name = "mp.jwt.verify.issuer")
@@ -64,6 +68,10 @@ public class AuthService {
 
     @Inject
     JsonWebToken jwt;
+
+    public Optional<User.UserProfile> me() {
+        return userRepository.findById(currentUser.id()).map(User::toProfile);
+    }
 
     // ── Register ─────────────────────────────────────────────────────────────
 

@@ -22,6 +22,7 @@ public class ChatTickets {
 
     public record Ticket(String userId, String otherUserId, String conversationId,
                          Instant expiresAt, Instant authExpiresAt) {}
+    public record IssuedTicket(String conversationId, String ticket) {}
 
     public static final class Peer {
         public final String userId;
@@ -50,7 +51,7 @@ public class ChatTickets {
         }
     }
 
-    public MessageResource.TicketResponse issue(String userId, String otherUserId, Instant authExpiresAt) {
+    public IssuedTicket issue(String userId, String otherUserId, Instant authExpiresAt) {
         pending.entrySet().removeIf(entry -> entry.getValue().expiresAt().isBefore(Instant.now()));
         if (pending.size() >= 10_000) {
             throw new WebApplicationException("Too many pending connections", Response.Status.TOO_MANY_REQUESTS);
@@ -61,7 +62,7 @@ public class ChatTickets {
         String conversationId = ConversationId.of(userId, otherUserId);
         pending.put(value, new Ticket(userId, otherUserId, conversationId,
                 Instant.now().plusSeconds(TICKET_SECONDS), authExpiresAt));
-        return new MessageResource.TicketResponse(conversationId, value);
+        return new IssuedTicket(conversationId, value);
     }
 
     public Ticket consume(String value, String conversationId) {

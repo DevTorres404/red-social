@@ -6,10 +6,29 @@ Resumen del estado del repositorio al 29-09-2026. Este documento describe el dis
 
 Orbit es un monolito distribuido en servicios Docker, con el backend organizado por módulos de negocio. El navegador React usa HTTP REST para operaciones y consultas; el chat y las actualizaciones en vivo del feed usan WebSockets. Quarkus guarda nodos, relaciones y trabajos durables en Neo4j mediante Cypher. Los binarios de medios viven en RustFS compatible con S3. El navegador recibe notificaciones Web Push desde el backend.
 
-```text
-React + Vite ── /api (REST) ── Quarkus ── Neo4j
-       ├────── /ws/chat, /ws/feed ──┤       └── RustFS / S3 (imágenes)
-       └────── Service Worker ◀──── Web Push
+```mermaid
+architecture-beta
+    group browser(cloud)[Navegador del Usuario]
+    group infra(cloud)[Infraestructura Docker]
+
+    service react(component)[React + Vite\nFrontend SPA] in browser
+    service sw(component)[Service Worker\nWeb Push] in browser
+
+    service nginx(component)[Nginx\nReverse Proxy + SPA] in infra
+    service quarkus(component)[Quarkus 3 + Java 21\nBackend API] in infra
+    service neo4j(database)[Neo4j 5.26\nBase de Datos de Grafos] in infra
+    service rustfs(database)[RustFS\nObject Storage S3] in infra
+
+    react --> nginx: HTTPS/REST/WebSocket
+    sw --> rustfs: Push Service (FCM/APNS/etc)
+    
+    nginx --> quarkus: /api (REST)
+    nginx --> quarkus: /ws/chat, /ws/feed (WebSocket)
+    
+    quarkus --> neo4j: Cypher (Bolt 7687)
+    quarkus --> rustfs: S3 API (9000)
+    
+    quarkus -.-> sw: Web Push (VAPID)
 ```
 
 La relación social es dirigida: `(:Usuario)-[:SIGUE]->(:Usuario)`. Seguir no implica amistad ni seguimiento recíproco. La app se despliega como frontend, backend, Neo4j y RustFS; no es una arquitectura de microservicios por dominio.
@@ -63,6 +82,22 @@ Cada módulo suele separar `*Resource` (HTTP/adaptador de entrada), `*Repository
 - **Auth frontend**: access token en memoria; refresh token en cookie HttpOnly/Secure/SameSite Strict. En 401, el cliente rota refresh e intenta una vez. No persiste access token en localStorage.
 - **Estado UI**: AuthContext es fuente de sesión; PresenceContext y FeedEventsContext coordinan estado compartido. Formularios y paginación mantienen estado en sus páginas. Web Push se gestiona por dispositivo mediante Service Worker.
 - **Consistencia**: Neo4j es fuente de verdad. Notificaciones push usan cola durable y reintentos *at least once*. Los tickets/conexiones WebSocket son en memoria; la instalación documentada ejecuta una sola réplica.
+
+## Modelo de datos (Cypher)
+
+```cypher
+(:Usuario)-[:SIGUE]->(:Usuario)
+(:Usuario)-[:PUBLICA]->(:Post {id, content, mediaKey, mediaType, mediaSize, createdAt})
+(:Usuario)-[:LE_GUSTA]->(:Post)
+(:Usuario)-[:ENVIA]->(:Mensaje)-[:EN_CONVERSACION]->(:Conversacion)
+(:Usuario)-[:PARTICIPA]->(:Conversacion)
+(:Usuario)-[:HAS_SUBSCRIPTION]->(:PushSubscription)
+(:PushDelivery {id, postId, refId, type, url, payload, recipientId, subscriptionId, status, attempts, nextAt})-[:FOR_SUBSCRIPTION]->(:PushSubscription)
+```
+
+- `mediaKey` es una clave generada por el servidor, no una URL suministrada por el cliente.
+- Las imágenes se guardan en el bucket privado `red-social` (o `RUSTFS_BUCKET`).
+- `PushDelivery` cola notificaciones Web Push de forma durable; el worker las procesa cada 10s.
 
 ## Funcionalidades e integraciones implementadas
 

@@ -1,15 +1,20 @@
 package com.redsocial.messaging;
 
+import com.redsocial.common.CurrentUser;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.LongSupplier;
 import java.util.stream.Collectors;
 import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.core.Response;
 
 /**
@@ -26,6 +31,7 @@ import jakarta.ws.rs.core.Response;
  */
 @ApplicationScoped
 public class PresenceService {
+    @Inject CurrentUser currentUser;
 
     private static final Logger LOG = Logger.getLogger(PresenceService.class);
 
@@ -41,6 +47,39 @@ public class PresenceService {
     public PresenceService() { this(System::currentTimeMillis); }
 
     PresenceService(LongSupplier clock) { this.clock = clock; }
+
+    public void registerAppSession(String sessionId) {
+        registerConnection(currentUser.id(), "app:" + validSessionId(sessionId));
+    }
+
+    public void disconnectAppSession(String sessionId) {
+        unregisterConnection(currentUser.id(), "app:" + validSessionId(sessionId));
+    }
+
+    public static String validSessionId(String value) {
+        if (value == null) throw new BadRequestException("Invalid session ID");
+        try {
+            UUID id = UUID.fromString(value);
+            if (!id.toString().equals(value)) throw new IllegalArgumentException();
+            return value;
+        } catch (IllegalArgumentException error) {
+            throw new BadRequestException("Invalid session ID");
+        }
+    }
+
+    public Map<String, Object> getStatus(String userId) {
+        return Map.of("userId", userId, "online", isOnline(userId),
+                "connectionCount", getConnectionCount(userId));
+    }
+
+    public Map<String, Boolean> getBatchStatus(List<String> userIds) {
+        List<String> filtered = userIds.stream().filter(id -> !id.equals(currentUser.id())).distinct().toList();
+        return getOnlineStatus(filtered);
+    }
+
+    public Map<String, Object> getMyStatus() {
+        return getStatus(currentUser.id());
+    }
 
     /**
      * Register a new WebSocket connection for a user.

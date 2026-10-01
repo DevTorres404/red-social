@@ -72,7 +72,7 @@ export default function NotificationSettingsPage() {
         <span className="notif-hero-eyebrow">
           <span className="notif-hero-dot" /> CONFIGURACIÓN
         </span>
-        <h1>Notificaciones <span>Push</span></h1>
+        <h1>Notificaciones <span>en tu dispositivo</span></h1>
         <p>Mantenete al tanto de lo que pasa en Orbit, estés donde estés.</p>
       </header>
 
@@ -85,7 +85,7 @@ export default function NotificationSettingsPage() {
               {enabled ? <Bell size={22} /> : <BellOff size={22} />}
             </div>
             <div className="notif-status-text">
-              <h2>Avisos de escritorio</h2>
+              <h2>Alertas en tiempo real</h2>
               <p>{enabled ? 'Recibiendo notificaciones en este equipo.' : 'Las notificaciones están apagadas.'}</p>
             </div>
           </div>

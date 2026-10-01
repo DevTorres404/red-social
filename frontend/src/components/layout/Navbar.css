@@ -151,6 +151,10 @@
   padding: 8px 10px;
   border-radius: 12px;
   transition: all 0.2s ease;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
 }
 .nav-profile-link:hover {
   color: #fff;

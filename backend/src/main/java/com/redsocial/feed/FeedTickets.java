@@ -25,6 +25,7 @@ public class FeedTickets {
     private final ConcurrentHashMap<String, Viewer> connected = new ConcurrentHashMap<>();
 
     public record FeedTicket(String userId, Instant expiresAt, Instant authExpiresAt) {}
+    public record IssuedTicket(String scope, String ticket) {}
 
     public static final class Viewer {
         public final String userId;
@@ -48,7 +49,7 @@ public class FeedTickets {
         }
     }
 
-    public FeedResource.TicketResponse issue(String userId, Instant authExpiresAt) {
+    public IssuedTicket issue(String userId, Instant authExpiresAt) {
         pending.entrySet().removeIf(entry -> entry.getValue().expiresAt().isBefore(Instant.now()));
         if (pending.size() >= 10_000) {
             throw new WebApplicationException("Too many pending connections", Response.Status.TOO_MANY_REQUESTS);
@@ -57,7 +58,7 @@ public class FeedTickets {
         random.nextBytes(bytes);
         String value = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
         pending.put(value, new FeedTicket(userId, Instant.now().plusSeconds(TICKET_SECONDS), authExpiresAt));
-        return new FeedResource.TicketResponse("feed", value);
+        return new IssuedTicket("feed", value);
     }
 
     public FeedTicket consume(String value) {

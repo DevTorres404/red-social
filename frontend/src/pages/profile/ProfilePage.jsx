@@ -1,19 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
-import { usersApi } from '../../lib/api';
 import FollowButton from '../../components/shared/FollowButton';
 import UserListModal from '../../components/shared/UserListModal';
 import ConnectionPager from '../../components/shared/ConnectionPager';
 import PostCard from '../../components/feed/PostCard';
 import OnlineIndicator from '../../components/presence/OnlineIndicator';
 import { Sparkles, Users, ArrowRight, MessageSquare, RefreshCw, Camera, Pencil } from 'lucide-react';
+import { useProfile } from './useProfile';
 import './ProfilePage.css';
 
 const toneBackgrounds = ['#e6e0ff', '#f7def4', '#dde8ff', '#e7dcfa'];
 const toneColors = ['#5a45ac', '#9d4e9a', '#4a64ae', '#7854a9'];
-const MAX_AVATAR_BYTES = 6 * 1024 * 1024;
-const EMPTY_CONNECTIONS = { users: [], total: 0, page: 0, size: 4 };
 const wordCount = value => value.trim() ? value.trim().split(/\s+/).length : 0;
 
 function SocialIcon({ network }) {
@@ -50,153 +47,46 @@ function EmptyState({ title, description, action }) {
 
 export default function ProfilePage() {
   const { id } = useParams();
-  const { user: currentUser, updateUser } = useAuth();
-
-  const [profile, setProfile] = useState(null);
-  const [followers, setFollowers] = useState(EMPTY_CONNECTIONS);
-  const [following, setFollowing] = useState(EMPTY_CONNECTIONS);
-  const [connectionsLoading, setConnectionsLoading] = useState({ followers: false, following: false });
-  const [connectionsError, setConnectionsError] = useState({ followers: '', following: '' });
-  const [isFollowingProfile, setIsFollowingProfile] = useState(false);
-  const [posts, setPosts] = useState([]);
-  const [editing, setEditing] = useState(false);
-  const [bioDraft, setBioDraft] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [_saving, _setSaving] = useState(false);
-  const [_saveError, _setSaveError] = useState('');
-  const [avatarError, setAvatarError] = useState('');
-  const [avatarSuccess, setAvatarSuccess] = useState('');
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const avatarInputRef = useRef(null);
-  const viewedProfileId = useRef(id);
 
-  useEffect(() => { viewedProfileId.current = id; }, [id]);
-
-  // Modals state
-  const [modalConfig, setModalConfig] = useState({ isOpen: false, title: '', type: 'followers' });
-
-  useEffect(() => {
-    let active = true;
-    const fetchProfile = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const [profileData, followersData, followingData, postData, followStatus] = await Promise.all([
-          usersApi.getProfile(id),
-          usersApi.getFollowersPage(id),
-          usersApi.getFollowingPage(id),
-          usersApi.getPosts(id),
-          currentUser?.id && currentUser.id !== id ? usersApi.followStatus(id) : Promise.resolve({ following: false }),
-        ]);
-        if (!active) return;
-        setProfile(profileData);
-        setFollowers(followersData);
-        setFollowing(followingData);
-        setConnectionsError({ followers: '', following: '' });
-        setIsFollowingProfile(Boolean(followStatus.following));
-        setPosts(postData);
-        setBioDraft(profileData.bio || '');
-        setEditing(false);
-      } catch (err) {
-        if (!active) return;
-        setError('No se pudo cargar el perfil');
-        console.error(err);
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-    fetchProfile();
-    return () => { active = false; };
-  }, [id, currentUser?.id]);
-
-  const selectAvatar = async (event) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-    
-    setAvatarSuccess('');
-    setAvatarError('');
-    
-    const extension = file.name.toLowerCase();
-    const validType = (file.type === 'image/png' && extension.endsWith('.png'))
-      || (file.type === 'image/jpeg' && (extension.endsWith('.jpg') || extension.endsWith('.jpeg')));
-      
-    if (!validType || file.size === 0 || file.size > MAX_AVATAR_BYTES) {
-      setAvatarError('Elige una imagen PNG o JPG de hasta 6 MB.');
-      return;
-    }
-    
-    setUploadingAvatar(true);
-    try {
-      const updated = await usersApi.uploadAvatar(id, file);
-      setProfile(updated);
-      updateUser(updated);
-      setAvatarSuccess('Tu foto de perfil se actualizó.');
-      
-      // Clear success message after 3 seconds
-      setTimeout(() => setAvatarSuccess(''), 3000);
-    } catch (err) {
-      setAvatarError(err.message || 'No se pudo subir la foto. Inténtalo de nuevo.');
-    } finally {
-      setUploadingAvatar(false);
-    }
-  };
+  const {
+    currentUser,
+    profile,
+    followers,
+    following,
+    connectionsLoading,
+    connectionsError,
+    isFollowingProfile,
+    posts,
+    editing,
+    setEditing,
+    bioDraft,
+    setBioDraft,
+    loading,
+    error,
+    saving: _saving,
+    saveError: _saveError,
+    avatarError,
+    avatarSuccess,
+    uploadingAvatar,
+    modalConfig,
+    selectAvatar,
+    changeConnectionsPage,
+    handleToggleFollow,
+    saveProfile,
+    cancelEditing,
+    openFollowers,
+    openFollowing,
+    closeModal,
+    removePost,
+  } = useProfile(id);
 
   if (loading) return <div className="profile-loading" role="status">Cargando perfil...</div>;
   if (error) return <div className="profile-error">{error}</div>;
   if (!profile) return <div className="profile-error">Usuario no encontrado</div>;
 
   const isMe = currentUser?.id === id;
-  const changeConnectionsPage = async (type, page) => {
-    const fetchPage = type === 'followers' ? usersApi.getFollowersPage : usersApi.getFollowingPage;
-    setConnectionsLoading(prev => ({ ...prev, [type]: true }));
-    setConnectionsError(prev => ({ ...prev, [type]: '' }));
-    try {
-      const result = await fetchPage(id, page);
-      if (viewedProfileId.current !== id) return;
-      if (type === 'followers') setFollowers(result);
-      else setFollowing(result);
-    } catch (err) {
-      if (viewedProfileId.current !== id) return;
-      setConnectionsError(prev => ({ ...prev, [type]: err.message || 'No se pudo cargar esta página.' }));
-    } finally {
-      if (viewedProfileId.current === id) setConnectionsLoading(prev => ({ ...prev, [type]: false }));
-    }
-  };
-  const handleToggleFollow = (newFollowingState) => {
-    setIsFollowingProfile(newFollowingState);
-    setFollowers(prev => ({ ...prev, total: Math.max(0, prev.total + (newFollowingState ? 1 : -1)) }));
-    changeConnectionsPage('followers', 0);
-  };
-
-  const saveProfile = async (event) => {
-    event.preventDefault();
-    _setSaving(true);
-    _setSaveError('');
-    try {
-      const updated = await usersApi.updateProfile(id, { bio: bioDraft.trim() });
-      setProfile(updated);
-      updateUser(updated);
-      setEditing(false);
-    } catch (err) {
-      _setSaveError(err.message || 'No se pudo guardar el perfil');
-    } finally {
-      _setSaving(false);
-    }
-  };
-
-  const cancelEditing = () => {
-    setBioDraft(profile.bio || '');
-    _setSaveError('');
-    setEditing(false);
-  };
-
-  const openFollowers = () => setModalConfig({ isOpen: true, title: 'Seguidores', type: 'followers' });
-  const openFollowing = () => setModalConfig({ isOpen: true, title: 'Siguiendo', type: 'following' });
-  const closeModal = () => setModalConfig(prev => ({ ...prev, isOpen: false }));
   const modalPage = modalConfig.type === 'followers' ? followers : following;
-
   const tone = Math.abs(profile.username.split('').reduce((a, c) => a + c.charCodeAt(0), 0)) % 4;
 
   return (
@@ -321,7 +211,7 @@ export default function ProfilePage() {
                   <PostCard
                     key={post.id}
                     post={post}
-                    onDeleted={(postId) => setPosts(previous => previous.filter(item => item.id !== postId))}
+                    onDeleted={removePost}
                     showAuthor={false}
                   />
                 ))}

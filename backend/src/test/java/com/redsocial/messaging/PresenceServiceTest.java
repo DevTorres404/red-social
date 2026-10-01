@@ -60,8 +60,8 @@ class PresenceServiceTest {
     @Test
     void rejectsInvalidSessionIdentifiers() {
         assertEquals("06be694e-eb7b-4e66-af53-097b31c657e0",
-                PresenceResource.validSessionId("06be694e-eb7b-4e66-af53-097b31c657e0"));
-        assertThrows(BadRequestException.class, () -> PresenceResource.validSessionId(null));
-        assertThrows(BadRequestException.class, () -> PresenceResource.validSessionId("not-a-uuid"));
+                PresenceService.validSessionId("06be694e-eb7b-4e66-af53-097b31c657e0"));
+        assertThrows(BadRequestException.class, () -> PresenceService.validSessionId(null));
+        assertThrows(BadRequestException.class, () -> PresenceService.validSessionId("not-a-uuid"));
     }
 }

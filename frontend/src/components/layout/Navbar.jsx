@@ -276,6 +276,9 @@ export default function Navbar() {
             <div className="notifications-dropdown" id="navbar-notifications">
               <div className="notifications-header">
                 <h3>Notificaciones</h3>
+                <Link to="/settings/notifications" className="settings-link" onClick={() => setShowNotifications(false)} aria-label="Ajustes de notificaciones" title="Ajustes de notificaciones">
+                  <Settings size={18} />
+                </Link>
               </div>
               {notificationError && <p className="notifications-error" role="alert">{notificationError}</p>}
               <div className="notifications-list">

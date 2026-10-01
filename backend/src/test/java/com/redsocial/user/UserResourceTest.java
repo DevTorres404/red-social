@@ -10,13 +10,13 @@ class UserResourceTest {
 
     @Test
     void acceptsBoundedConnectionPages() {
-        assertDoesNotThrow(() -> UserResource.validateConnectionsPage(0));
-        assertDoesNotThrow(() -> UserResource.validateConnectionsPage(10_000));
+        assertDoesNotThrow(() -> UserService.validateConnectionsPage(0));
+        assertDoesNotThrow(() -> UserService.validateConnectionsPage(10_000));
     }
 
     @Test
     void rejectsInvalidConnectionPages() {
-        assertThrows(BadRequestException.class, () -> UserResource.validateConnectionsPage(-1));
-        assertThrows(BadRequestException.class, () -> UserResource.validateConnectionsPage(10_001));
+        assertThrows(BadRequestException.class, () -> UserService.validateConnectionsPage(-1));
+        assertThrows(BadRequestException.class, () -> UserService.validateConnectionsPage(10_001));
     }
 }

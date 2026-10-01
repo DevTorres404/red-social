@@ -1,7 +1,5 @@
 package com.redsocial.graph;
 
-import com.redsocial.common.CurrentUser;
-import com.redsocial.user.UserRepository;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
@@ -13,25 +11,22 @@ import java.util.List;
 @Produces(MediaType.APPLICATION_JSON)
 @RolesAllowed("user")
 public class GraphResource {
-    @Inject GraphRepository graph;
-    @Inject UserRepository users;
-    @Inject CurrentUser currentUser;
+    @Inject GraphService service;
 
     @GET @Path("/common/{otherId}")
     public List<GraphRepository.Person> common(@PathParam("otherId") String otherId) {
-        users.findById(otherId).orElseThrow(() -> new NotFoundException("User not found"));
-        return graph.commonFollowing(currentUser.id(), otherId);
+        return service.common(otherId);
     }
 
     @GET @Path("/reachable")
-    public List<GraphRepository.Reachable> reachable() { return graph.reachable(currentUser.id()); }
+    public List<GraphRepository.Reachable> reachable() { return service.reachable(); }
 
     @GET @Path("/recommendations")
-    public List<GraphRepository.Recommendation> recommendations() { return graph.recommendations(currentUser.id()); }
+    public List<GraphRepository.Recommendation> recommendations() { return service.recommendations(); }
 
     @GET @Path("/network-posts")
-    public List<GraphRepository.NetworkPost> networkPosts() { return graph.networkPosts(currentUser.id()); }
+    public List<GraphRepository.NetworkPost> networkPosts() { return service.networkPosts(); }
 
     @GET @Path("/trending-posts")
-    public List<GraphRepository.NetworkPost> trendingPosts() { return graph.trendingPosts(currentUser.id()); }
+    public List<GraphRepository.NetworkPost> trendingPosts() { return service.trendingPosts(); }
 }

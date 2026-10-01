@@ -1,6 +1,5 @@
 package com.redsocial.messaging;
 
-import com.redsocial.common.CurrentUser;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
@@ -10,8 +9,6 @@ import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 
 import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 
 /**
  * Presence REST endpoints.
@@ -29,15 +26,12 @@ public class PresenceResource {
     @Inject
     PresenceService presence;
 
-    @Inject
-    CurrentUser currentUser;
 
     @POST
     @Path("/session")
     @Operation(summary = "Keep the authenticated user's app session online")
     public Response heartbeat(SessionRequest request) {
-        String sessionId = validSessionId(request == null ? null : request.sessionId());
-        presence.registerConnection(currentUser.id(), "app:" + sessionId);
+        presence.registerAppSession(request == null ? null : request.sessionId());
         return Response.noContent().build();
     }
 
@@ -45,48 +39,22 @@ public class PresenceResource {
     @Path("/session/{sessionId}")
     @Operation(summary = "Mark the authenticated user's app session offline")
     public Response disconnect(@PathParam("sessionId") String value) {
-        presence.unregisterConnection(currentUser.id(), "app:" + validSessionId(value));
+        presence.disconnectAppSession(value);
         return Response.noContent().build();
-    }
-
-    static String validSessionId(String value) {
-        if (value == null) throw new BadRequestException("Invalid session ID");
-        try {
-            UUID id = UUID.fromString(value);
-            if (!id.toString().equals(value)) throw new IllegalArgumentException();
-            return value;
-        } catch (IllegalArgumentException error) {
-            throw new BadRequestException("Invalid session ID");
-        }
     }
 
     @GET
     @Path("/status/{userId}")
     @Operation(summary = "Get online status of a specific user")
     public Response getStatus(@PathParam("userId") String userId) {
-        // Users can only see status of users they follow or are in conversation with
-        // For now, allow querying any user (can be restricted later)
-        boolean online = presence.isOnline(userId);
-        int connections = presence.getConnectionCount(userId);
-        return Response.ok(Map.of(
-                "userId", userId,
-                "online", online,
-                "connectionCount", connections
-        )).build();
+        return Response.ok(presence.getStatus(userId)).build();
     }
 
     @POST
     @Path("/status/batch")
     @Operation(summary = "Get online status for multiple users")
     public Response getBatchStatus(List<String> userIds) {
-        // Filter out current user
-        List<String> filtered = userIds.stream()
-                .filter(id -> !id.equals(currentUser.id()))
-                .distinct()
-                .toList();
-
-        Map<String, Boolean> statuses = presence.getOnlineStatus(filtered);
-        return Response.ok(statuses).build();
+        return Response.ok(presence.getBatchStatus(userIds)).build();
     }
 
     @GET
@@ -100,12 +68,6 @@ public class PresenceResource {
     @Path("/me")
     @Operation(summary = "Get current user's own presence info")
     public Response getMyStatus() {
-        boolean online = presence.isOnline(currentUser.id());
-        int connections = presence.getConnectionCount(currentUser.id());
-        return Response.ok(Map.of(
-                "userId", currentUser.id(),
-                "online", online,
-                "connectionCount", connections
-        )).build();
+        return Response.ok(presence.getMyStatus()).build();
     }
 }

@@ -1,6 +1,5 @@
 package com.redsocial.notification;
 
-import com.redsocial.common.CurrentUser;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
@@ -25,34 +24,26 @@ import java.util.Map;
 @Tag(name = "Notifications")
 public class NotificationResource {
 
-    @Inject
-    NotificationRepository notificationRepository;
-
-    @Inject
-    CurrentUser currentUser;
+    @Inject NotificationService service;
 
     @GET
     @Operation(summary = "Get all notifications for the current user")
     public List<Notification> getAll() {
-        String userId = currentUser.id();
-        return notificationRepository.findByUser(userId);
+        return service.getAll();
     }
 
     @GET
     @Path("/unread")
     @Operation(summary = "Get the count of unread notifications")
     public Response getUnreadCount() {
-        String userId = currentUser.id();
-        long count = notificationRepository.countUnread(userId);
-        return Response.ok(Map.of("unread", count)).build();
+        return Response.ok(Map.of("unread", service.getUnreadCount())).build();
     }
 
     @POST
     @Path("/read-all")
     @Operation(summary = "Mark all notifications as read")
     public Response markAllAsRead() {
-        String userId = currentUser.id();
-        notificationRepository.markAllAsRead(userId);
+        service.markAllAsRead();
         return Response.noContent().build();
     }
 }

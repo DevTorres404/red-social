@@ -40,12 +40,6 @@ public class AuthResource {
     @Inject
     AuthService authService;
 
-    @Inject
-    com.redsocial.user.UserRepository userRepository;
-
-    @Inject
-    com.redsocial.common.CurrentUser currentUser;
-
     private static final String REFRESH_COOKIE_NAME = "rt";
     private static final int REFRESH_COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30 days
     private static final String REFRESH_COOKIE_PATH = "/api/auth";
@@ -146,8 +140,8 @@ public class AuthResource {
     @RolesAllowed("user")
     @Operation(summary = "Get current authenticated user")
     public Response me() {
-        return userRepository.findById(currentUser.id())
-                .map(user -> Response.ok(user.toProfile()).build())
+        return authService.me()
+                .map(profile -> Response.ok(profile).build())
                 .orElse(Response.status(Response.Status.UNAUTHORIZED).build());
     }
 }

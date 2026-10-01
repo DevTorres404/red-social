@@ -1,16 +1,13 @@
 package com.redsocial.feed;
 
-import com.redsocial.common.CurrentUser;
 import com.redsocial.post.Post;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
-import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 
-import java.time.Instant;
 import java.util.List;
 
 /**
@@ -26,17 +23,7 @@ import java.util.List;
 @Tag(name = "Feed")
 public class FeedResource {
 
-    @Inject
-    FeedRepository feedRepository;
-
-    @Inject
-    FeedTickets tickets;
-
-    @Inject
-    CurrentUser currentUser;
-
-    @Inject
-    JsonWebToken jwt;
+    @Inject FeedService service;
 
     public record TicketResponse(String scope, String ticket) {}
 
@@ -44,7 +31,7 @@ public class FeedResource {
     @Path("/ws-ticket")
     @Operation(summary = "Issue a single-use ticket for the broadcast feed WebSocket channel")
     public TicketResponse ticket() {
-        return tickets.issue(currentUser.id(), Instant.ofEpochSecond(jwt.getExpirationTime()));
+        return new TicketResponse("feed", service.issueTicket());
     }
 
     @GET
@@ -52,8 +39,7 @@ public class FeedResource {
     public List<Post> getHomeFeed(
             @QueryParam("skip") @DefaultValue("0") int skip,
             @QueryParam("limit") @DefaultValue("20") int limit) {
-        validatePage(skip, limit);
-        return feedRepository.getHomeFeed(currentUser.id(), skip, limit);
+        return service.getHomeFeed(skip, limit);
     }
 
     @GET
@@ -62,13 +48,7 @@ public class FeedResource {
     public List<Post> getExploreFeed(
             @QueryParam("skip") @DefaultValue("0") int skip,
             @QueryParam("limit") @DefaultValue("20") int limit) {
-        validatePage(skip, limit);
-        return feedRepository.getExploreFeed(currentUser.id(), skip, limit);
+        return service.getExploreFeed(skip, limit);
     }
 
-    static void validatePage(int skip, int limit) {
-        if (skip < 0 || skip > 10_000 || limit < 1 || limit > 100) {
-            throw new BadRequestException("skip must be 0..10000 and limit must be 1..100");
-        }
-    }
 }
