@@ -5,7 +5,7 @@
 
 ---
 
-## 👥 Integrantes
+## Integrantes
 
 | Nombre | Rol |
 |--------|-----|
@@ -15,7 +15,7 @@
 
 ---
 
-## 📖 Descripción del proyecto
+## Descripción del proyecto
 
 **Orbit** es una red social distribuida construida como monolito modular en contenedores Docker. El backend (Quarkus + Java 21) expone una API REST y canales WebSocket, persiste el grafo social y los datos estructurados en **Neo4j**, almacena archivos multimedia en **RustFS (S3-compatible)**, y envía notificaciones **Web Push** mediante Service Workers.
 
@@ -29,7 +29,7 @@ La arquitectura demuestra el uso consciente de cada mecanismo propio de sistemas
 
 ---
 
-## 🏗️ Arquitectura
+## Arquitectura
 
 ### Diagrama de alto nivel
 
@@ -103,7 +103,7 @@ graph TD
 
 ---
 
-## 🛠️ Stack tecnológico
+## Stack tecnológico
 
 | Componente | Tecnología | Versión | Justificación |
 |------------|------------|---------|---------------|
@@ -131,7 +131,7 @@ graph TD
 
 ---
 
-## 🚀 Instrucciones de ejecución
+## Instrucciones de ejecución
 
 ### Prerrequisitos
 
@@ -189,7 +189,7 @@ sh scripts/generate-jwt-keys.sh
 node scripts/generate-vapid-keys.mjs
 ```
 
-> ⚠️ **Nunca commitear** `.env`, `secrets/`, ni claves privadas. Están en `.gitignore`.
+> **ADVERTENCIA:** No incluir en el control de versiones el archivo `.env`, el directorio `secrets/`, ni las claves privadas. Estos deben permanecer en el `.gitignore`.
 
 ### Levantar entorno de desarrollo
 
@@ -243,7 +243,7 @@ Ver `comando.md` para detalles: túnel Cloudflare, certificados, backups, actual
 
 ---
 
-## 🔌 Endpoints principales (API REST)
+## Endpoints principales (API REST)
 
 ### Autenticación
 ```
@@ -319,7 +319,7 @@ GET    /api/graph/trending-posts        # Posts destacados por likes (Q5)
 
 ---
 
-## 🌐 WebSocket — Detalle técnico
+## WebSocket — Detalle técnico
 
 ### Chat (`/ws/chat/{conversationId}`)
 
@@ -346,7 +346,7 @@ GET    /api/graph/trending-posts        # Posts destacados por likes (Q5)
 
 ---
 
-## 🔔 Web Push — Detalle técnico
+## Web Push — Detalle técnico
 
 ### Flujo completo
 
@@ -379,7 +379,7 @@ GET    /api/graph/trending-posts        # Posts destacados por likes (Q5)
 
 ---
 
-## 🧠 Consultas Cypher implementadas (5 no triviales)
+## Consultas Cypher implementadas (5 no triviales)
 
 Todas en `backend/src/main/java/com/redsocial/graph/GraphRepository.java`. Parten del `userId` del JWT.
 
@@ -453,7 +453,7 @@ Resultados esperados:
 
 ---
 
-## 🔐 Seguridad y autenticación
+## Seguridad y autenticación
 
 ### Estrategia de tokens (JWT + Refresh Rotation)
 
@@ -482,7 +482,7 @@ Resultados esperados:
 
 ---
 
-## 🐳 Dockerización
+## Dockerización
 
 ### `docker-compose.yml` (Desarrollo)
 
@@ -512,7 +512,7 @@ services:
 
 ---
 
-## 🧪 Testing y verificación
+## Testing y verificación
 
 ### Tests unitarios backend (9 PASS)
 ```bash
@@ -539,7 +539,7 @@ cd frontend && npm run lint && npm run build
 
 ---
 
-## 📁 Estructura del repositorio
+## Estructura del repositorio
 
 ```
 red-social/
@@ -584,7 +584,7 @@ red-social/
 
 ---
 
-## 🎯 Decisiones técnicas relevantes
+## Decisiones técnicas relevantes
 
 | Decisión | Alternativa | Justificación |
 |----------|-------------|---------------|
@@ -603,7 +603,7 @@ red-social/
 
 ---
 
-## 📋 Evidencias obligatorias (checklist de demostración)
+## Evidencias obligatorias (checklist de demostración)
 
 - [ ] **1. Registro e inicio de sesión** — `POST /api/auth/register`, `POST /api/auth/login`
 - [ ] **2. Dos o más usuarios interactuando** — Usuarios A y B creados, logueados en pestañas distintas
@@ -620,7 +620,7 @@ red-social/
 
 ---
 
-## 📚 Documentación adicional
+## Documentación adicional
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — Arquitectura detallada, patrones, flujos, modelo de datos
 - [`docs/CYPHER_QUERIES.md`](docs/CYPHER_QUERIES.md) — 5 consultas Cypher con semántica, fixture y resultados esperados
@@ -629,7 +629,7 @@ red-social/
 
 ---
 
-## 📄 Licencia
+## Licencia
 
 Proyecto académico — Uso educativo.
 
