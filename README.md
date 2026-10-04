@@ -10,8 +10,8 @@
 | Nombre | Rol |
 |--------|-----|
 | Damian Torres | Full Stack Developer / DevOps |
-| Integrante 2 | Backend Developer |
-| Integrante 3 | Frontend Developer |
+| Melanie Tomala | QA / QC |
+| Jean Cedeño | Frontend Developer |
 
 ---
 
