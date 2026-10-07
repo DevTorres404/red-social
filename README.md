@@ -3,6 +3,8 @@
 > **Proyecto académico — Sistemas Distribuidos y Cloud Computing**  
 > Aplicación web distribuida que implementa las funcionalidades esenciales de una red social, integrando diferentes tecnologías y mecanismos de comunicación, persistencia y almacenamiento.
 
+**🌐 Enlace de Producción:** [https://orbit.labtorres.me](https://orbit.labtorres.me)
+
 ---
 
 ## Integrantes
@@ -238,8 +240,6 @@ cd ..
 # Usar compose autónomo (no combinar con dev)
 docker compose -f docker-compose.prod.yml up --build -d
 ```
-
-Ver `comando.md` para detalles: túnel Cloudflare, certificados, backups, actualizaciones.
 
 ---
 
@@ -577,9 +577,7 @@ red-social/
 ├── docker-compose.prod.yml
 ├── .env.example
 ├── .env.prod.example
-├── README.md               # Este archivo
-├── comando.md              # Guía despliegue producción
-└── PLAN.md                 # Estado de tareas y puertas de salida
+└── README.md               # Este archivo
 ```
 
 ---
@@ -605,18 +603,18 @@ red-social/
 
 ## Evidencias obligatorias (checklist de demostración)
 
-- [ ] **1. Registro e inicio de sesión** — `POST /api/auth/register`, `POST /api/auth/login`
-- [ ] **2. Dos o más usuarios interactuando** — Usuarios A y B creados, logueados en pestañas distintas
-- [ ] **3. Seguimiento entre usuarios** — A sigue a B → `POST /api/users/{id}/follow` → aparece en seguidores/seguidos
-- [ ] **4. Visualización del grafo generado** — Pestaña `/graph` → mapa interactivo (Three.js) + pestañas Descubrir/Mapa/En común
-- [ ] **5. Creación de publicaciones** — Post texto + post con imagen → `POST /api/posts/with-image`
-- [ ] **6. Carga de archivo a S3** — Imagen subida → RustFS Console muestra objeto en bucket `red-social/posts/`
-- [ ] **7. Feed personalizado** — `/feed` muestra solo posts de seguidos (no de todos)
-- [ ] **8. Consulta de recomendación basada en grafo** — `/graph` → pestaña "Para ti" → recomendaciones con conexiones comunes
-- [ ] **9. Chat tiempo real entre dos clientes** — A y B abren chat → mensajes instantáneos sin recargar
-- [ ] **10. Recepción notificación Web Push** — A publica → B (con push activado) recibe notificación nativa → click abre post
-- [ ] **11. Ejecución consultas Cypher** — Neo4j Browser: `CALL db.schema.visualization()`, correr Q1–Q5
-- [ ] **12. Levantamiento infraestructura contenedores** — `docker compose up --build` → todos healthy
+- [x] **1. Registro e inicio de sesión** — `POST /api/auth/register`, `POST /api/auth/login`
+- [x] **2. Dos o más usuarios interactuando** — Usuarios A y B creados, logueados en pestañas distintas
+- [x] **3. Seguimiento entre usuarios** — A sigue a B → `POST /api/users/{id}/follow` → aparece en seguidores/seguidos
+- [x] **4. Visualización del grafo generado** — Pestaña `/graph` → mapa interactivo (Three.js) + pestañas Descubrir/Mapa/En común
+- [x] **5. Creación de publicaciones** — Post texto + post con imagen → `POST /api/posts/with-image`
+- [x] **6. Carga de archivo a S3** — Imagen subida → RustFS Console muestra objeto en bucket `red-social/posts/`
+- [x] **7. Feed personalizado** — `/feed` muestra solo posts de seguidos (no de todos)
+- [x] **8. Consulta de recomendación basada en grafo** — `/graph` → pestaña "Para ti" → recomendaciones con conexiones comunes
+- [x] **9. Chat tiempo real entre dos clientes** — A y B abren chat → mensajes instantáneos sin recargar
+- [x] **10. Recepción notificación Web Push** — A publica → B (con push activado) recibe notificación nativa → click abre post
+- [x] **11. Ejecución consultas Cypher** — Neo4j Browser: `CALL db.schema.visualization()`, correr Q1–Q5
+- [x] **12. Levantamiento infraestructura contenedores** — `docker compose up --build` → todos healthy
 
 ---
 
@@ -624,8 +622,6 @@ red-social/
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — Arquitectura detallada, patrones, flujos, modelo de datos
 - [`docs/CYPHER_QUERIES.md`](docs/CYPHER_QUERIES.md) — 5 consultas Cypher con semántica, fixture y resultados esperados
-- [`comando.md`](comando.md) — Despliegue producción con Cloudflare Tunnel, backups, actualizaciones
-- [`PLAN.md`](PLAN.md) — Estado de tareas, puertas de salida, deuda técnica
 
 ---
 
