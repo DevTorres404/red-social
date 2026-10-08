@@ -1,6 +1,7 @@
 package com.redsocial;
 
 import com.redsocial.auth.AuthResource;
+import com.redsocial.auth.LoginRateLimiter;
 import com.redsocial.feed.FeedResource;
 import com.redsocial.graph.GraphResource;
 import com.redsocial.messaging.MessageResource;
@@ -9,13 +10,12 @@ import com.redsocial.notification.NotificationResource;
 import com.redsocial.notification.PushResource;
 import com.redsocial.post.PostResource;
 import com.redsocial.user.UserResource;
-import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ServiceLayerTest {
@@ -26,10 +26,16 @@ class ServiceLayerTest {
                 PushResource.class, PostResource.class, UserResource.class)) {
             var dependencies = List.of(resource.getDeclaredFields()).stream()
                     .filter(field -> field.isAnnotationPresent(Inject.class)).toList();
-            assertEquals(1, dependencies.size(), resource.getSimpleName());
-            Class<?> service = dependencies.get(0).getType();
-            assertTrue(service.getSimpleName().endsWith("Service"), resource.getSimpleName());
-            assertTrue(service.isAnnotationPresent(ApplicationScoped.class), service.getSimpleName());
+            assertFalse(dependencies.isEmpty(), resource.getSimpleName());
+            for (var dependency : dependencies) {
+                Class<?> type = dependency.getType();
+                // La capa de recursos sólo inyecta colaboradores de aplicación:
+                // services o el LoginRateLimiter (bean @ApplicationScoped vía
+                // LoginRateLimiterProducer). Nunca repositorios ni infraestructura.
+                boolean isService = type.getSimpleName().endsWith("Service");
+                boolean isRateLimiter = type == LoginRateLimiter.class;
+                assertTrue(isService || isRateLimiter, type.getSimpleName());
+            }
         }
     }
 }

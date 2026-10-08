@@ -288,8 +288,7 @@ public class DatabaseSeeder {
                     mediaUrl: '', createdAt: $now
                 })
 
-                // OJO: [:PUBLICO], no [:PUBLICA] — PUBLICA es palabra reservada
-                // en Cypher y el query no compila.
+                // Relación de autoría con nombre propio :PUBLICO (decisión de diseño del grupo; la consigna permite criterio propio).
                 CREATE (melanie)-[:PUBLICO]->(p1)
                 CREATE (damian)-[:PUBLICO]->(p2)
                 CREATE (jean)-[:PUBLICO]->(p3)

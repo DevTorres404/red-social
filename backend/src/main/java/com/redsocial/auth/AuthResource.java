@@ -5,15 +5,18 @@ import com.redsocial.auth.dto.LoginRequest;
 import com.redsocial.auth.dto.RegisterRequest;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.POST;
 import jakarta.ws.rs.GET;
+import jakarta.ws.rs.HeaderParam;
+import jakarta.ws.rs.NotAuthorizedException;
+import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.NewCookie;
-import jakarta.annotation.security.RolesAllowed;
+import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 
@@ -40,10 +43,15 @@ public class AuthResource {
     @Inject
     AuthService authService;
 
+    @Inject
+    LoginRateLimiter loginRateLimiter;
+
     private static final String REFRESH_COOKIE_NAME = "rt";
     private static final int REFRESH_COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30 days
     private static final String REFRESH_COOKIE_PATH = "/api/auth";
     private static final String LEGACY_REFRESH_COOKIE_PATH = "/api/auth/refresh";
+    private static final String CLIENT_IP_HEADER = "X-Forwarded-For";
+    private static final String LOCAL_CLIENT_KEY = "local";
 
     private NewCookie buildRefreshCookie(String token, boolean isLogout) {
         return new NewCookie.Builder(REFRESH_COOKIE_NAME)
@@ -91,15 +99,42 @@ public class AuthResource {
      *
      * Validates credentials against Neo4j (bcrypt comparison) and returns a JWT.
      * Also sets the refresh token in an HttpOnly cookie.
+     * Public endpoint: protegido contra fuerza bruta por ventana fija por
+     * cliente (primer valor de X-Forwarded-For; "local" si no viene).
      */
     @POST
     @Path("/login")
     @Operation(summary = "Login with email or username and password")
-    public Response login(@Valid LoginRequest request) {
-        AuthResult result = authService.login(request);
-        return Response.ok(result.response())
-                .cookie(buildRefreshCookie(result.rawRefreshToken(), false), clearLegacyRefreshCookie())
-                .build();
+    public Response login(@Valid LoginRequest request, @HeaderParam(CLIENT_IP_HEADER) String forwardedFor) {
+        String key = clientKey(forwardedFor);
+        if (!loginRateLimiter.allow(key)) {
+            throw new WebApplicationException(
+                    "Demasiados intentos de inicio de sesión. Intente de nuevo en unos minutos.",
+                    Response.Status.TOO_MANY_REQUESTS);
+        }
+        try {
+            AuthResult result = authService.login(request);
+            loginRateLimiter.onSuccess(key);
+            return Response.ok(result.response())
+                    .cookie(buildRefreshCookie(result.rawRefreshToken(), false), clearLegacyRefreshCookie())
+                    .build();
+        } catch (NotAuthorizedException ex) {
+            loginRateLimiter.registerFailure(key);
+            throw ex;
+        }
+    }
+
+    /**
+     * Primera dirección del X-Forwarded-For (el cliente real detrás de nginx)
+     * o "local" cuando la cabecera no está presente.
+     */
+    private static String clientKey(String forwardedFor) {
+        if (forwardedFor == null || forwardedFor.isBlank()) {
+            return LOCAL_CLIENT_KEY;
+        }
+        int comma = forwardedFor.indexOf(',');
+        String first = comma == -1 ? forwardedFor : forwardedFor.substring(0, comma);
+        return first.trim();
     }
 
     /**

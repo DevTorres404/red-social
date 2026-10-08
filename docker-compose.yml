@@ -91,6 +91,8 @@ services:
       - ./secrets:/deployments/config:ro
     environment:
       QUARKUS_PROFILE: prod
+      # Dev stack runs the prod profile for parity while demo seeding stays
+      # enabled (defaults); the prod compose sets APP_SEED_ENABLED=false.
       # Neo4j
       QUARKUS_NEO4J_URI: bolt://neo4j:7687
       QUARKUS_NEO4J_AUTHENTICATION_USERNAME: ${NEO4J_USER:-neo4j}
@@ -110,7 +112,6 @@ services:
       # Run ./scripts/generate-jwt-keys.sh before starting the stack.
       SMALLRYE_JWT_SIGN_KEY_LOCATION: ${SMALLRYE_JWT_SIGN_KEY_LOCATION:-/deployments/config/privateKey.pem}
       MP_JWT_VERIFY_PUBLICKEY_LOCATION: ${MP_JWT_VERIFY_PUBLICKEY_LOCATION:-/deployments/config/publicKey.pem}
-      APP_JWT_SECRET: ${JWT_SECRET}
       # Web Push VAPID
       APP_VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
       APP_VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}

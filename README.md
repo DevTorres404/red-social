@@ -95,13 +95,15 @@ graph TD
 
 // Relaciones
 (:Usuario)-[:SIGUE]->(:Usuario)                    // Seguimiento dirigido (no recíproco)
-(:Usuario)-[:PUBLICA]->(:Post)                     // Autoría de posts
+(:Usuario)-[:PUBLICO]->(:Post)                     // Autoría de posts
 (:Usuario)-[:LE_GUSTA]->(:Post)                    // Like/reacción
 (:Usuario)-[:ENVIA]->(:Mensaje)-[:EN_CONVERSACION]->(:Conversacion)
 (:Usuario)-[:PARTICIPA]->(:Conversacion)           // Participantes de conversación
 (:Usuario)-[:HAS_SUBSCRIPTION]->(:PushSubscription) // Suscripciones Web Push por dispositivo
 (:PushDelivery)-[:FOR_SUBSCRIPTION]->(:PushSubscription) // Cola de entregas push
 ```
+
+Los nombres de relaciones `:SIGUE`, `:PUBLICO` y `:LE_GUSTA` son un diseño propio del grupo, tal como lo habilita la consigna («El grupo deberá diseñar y justificar su propio criterio»). `:PUBLICO` expresa la autoría de un post y `:LE_GUSTA` la reacción mínima registrada en el grafo, ambos con significado documentado en el código. Los ejemplos del enunciado (`:PUBLICA`, `:REACCIONA`) son conceptuales y no imponen una nomenclatura obligatoria.
 
 ---
 
@@ -283,7 +285,7 @@ GET    /api/posts/{id}/comments     # Comentarios paginados
 ```
 GET    /api/feed                    # Feed de seguidos (paginado)
 GET    /api/feed/explore            # Feed de exploración (paginado)
-GET    /api/feed/ws-ticket          # Ticket WebSocket para feed en vivo
+POST   /api/feed/ws-ticket          # Ticket WebSocket para feed en vivo (sin body)
 ```
 
 ### Mensajería (Chat)
@@ -296,9 +298,9 @@ GET    /api/messages/{userId}/read  # Marcar como leídos
 
 ### Notificaciones internas (Campana)
 ```
-GET    /api/notifications           # Lista paginada
-GET    /api/notifications/unread-count  # Contador no leídas
-POST   /api/notifications/read      # Marcar como leídas
+GET    /api/notifications           # Lista de notificaciones
+GET    /api/notifications/unread    # Contador de no leídas
+POST   /api/notifications/read-all  # Marcar todas como leídas
 ```
 
 ### Web Push
@@ -339,7 +341,7 @@ GET    /api/graph/trending-posts        # Posts destacados por likes (Q5)
 
 | Aspecto | Implementación |
 |---------|----------------|
-| **Autenticación** | Ticket vía `GET /api/feed/ws-ticket` |
+| **Autenticación** | Ticket vía `POST /api/feed/ws-ticket` (sin body) |
 | **Suscripción** | Usuario recibe eventos de posts/likes/comentarios de sus seguidos |
 | **Eventos** | `POST_CREATED`, `POST_LIKED`, `POST_COMMENTED`, `POST_DELETED` |
 | **Entrega** | Solo a suscriptores autorizados (verifica `SIGUE` al difundir) |
@@ -415,17 +417,17 @@ ORDER BY mutualCount DESC, username, id LIMIT 50
 
 ### Q4 — Publicaciones de la red (Feed grafo)
 ```cypher
-MATCH (:Usuario {id: $userId})-[:SIGUE]->(author:Usuario)-[:PUBLICA]->(p:Post)
+MATCH (:Usuario {id: $userId})-[:SIGUE]->(author:Usuario)-[:PUBLICO]->(p:Post)
 OPTIONAL MATCH (liker:Usuario)-[:LE_GUSTA]->(p)
 WITH author, p, count(DISTINCT liker) AS likeCount
 RETURN p.id, author.id, author.username, p.content, p.createdAt, likeCount
 ORDER BY createdAt DESC, id LIMIT 50
 ```
-> Recorrido `SIGUE` + `PUBLICA` — solo posts de autores que sigo. Conteo opcional de likes sin duplicar filas.
+> Recorrido `SIGUE` + `PUBLICO` — solo posts de autores que sigo. Conteo opcional de likes sin duplicar filas.
 
 ### Q5 — Publicaciones destacadas por reacciones (Trending)
 ```cypher
-MATCH (:Usuario {id: $userId})-[:SIGUE]->(author:Usuario)-[:PUBLICA]->(p:Post)
+MATCH (:Usuario {id: $userId})-[:SIGUE]->(author:Usuario)-[:PUBLICO]->(p:Post)
 OPTIONAL MATCH (liker:Usuario)-[:LE_GUSTA]->(p)
 WITH author, p, count(DISTINCT liker) AS likeCount
 RETURN p.id, author.id, author.username, p.content, p.createdAt, likeCount
@@ -473,6 +475,7 @@ Resultados esperados:
 - `CurrentUser` extrae `sub` del JWT verificado (no confía en cliente)
 - Verificación de propiedad antes de mutaciones (post, conversación, suscripción)
 - Rate limiting en WebSocket (10 msg/10s)
+- `POST /api/auth/login` está limitado por IP (ventana fija, 10 intentos en 15 min por defecto) para mitigar fuerza bruta; configurable vía `APP_AUTH_LOGIN_MAX_ATTEMPTS` y `APP_AUTH_LOGIN_WINDOW_SECONDS`
 - Validación de archivos: PNG/JPEG reales, ≤5 MiB, ≤16 MP, extension≡MIME
 
 ### Web Push — Validación de endpoints

@@ -87,7 +87,7 @@ Cada módulo suele separar `*Resource` (HTTP/adaptador de entrada), `*Repository
 
 ```cypher
 (:Usuario)-[:SIGUE]->(:Usuario)
-(:Usuario)-[:PUBLICA]->(:Post {id, content, mediaKey, mediaType, mediaSize, createdAt})
+(:Usuario)-[:PUBLICO]->(:Post {id, content, mediaKey, mediaType, mediaSize, createdAt})
 (:Usuario)-[:LE_GUSTA]->(:Post)
 (:Usuario)-[:ENVIA]->(:Mensaje)-[:EN_CONVERSACION]->(:Conversacion)
 (:Usuario)-[:PARTICIPA]->(:Conversacion)
