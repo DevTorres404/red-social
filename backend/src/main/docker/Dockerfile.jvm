@@ -1,6 +1,20 @@
 ####
-# JVM Dockerfile — build with: docker build -f src/main/docker/Dockerfile.jvm -t red-social-backend .
+# Multi-stage JVM Dockerfile
 ###
+
+# ── Stage 1: Build the application ──────────────────────────────────────────
+FROM maven:3.9.6-eclipse-temurin-21-alpine AS build
+WORKDIR /build
+
+# Optimize build by caching dependencies
+COPY pom.xml .
+RUN mvn dependency:go-offline -B
+
+# Copy source and compile
+COPY src ./src
+RUN mvn package -DskipTests
+
+# ── Stage 2: Create the runtime image ───────────────────────────────────────
 FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /deployments
@@ -9,10 +23,11 @@ WORKDIR /deployments
 RUN addgroup -S quarkus && adduser -S quarkus -G quarkus
 USER quarkus
 
-COPY --chown=quarkus:quarkus target/quarkus-app/lib/ ./lib/
-COPY --chown=quarkus:quarkus target/quarkus-app/*.jar ./
-COPY --chown=quarkus:quarkus target/quarkus-app/app/ ./app/
-COPY --chown=quarkus:quarkus target/quarkus-app/quarkus/ ./quarkus/
+# Copy the generated artifacts from the build stage
+COPY --from=build --chown=quarkus:quarkus /build/target/quarkus-app/lib/ ./lib/
+COPY --from=build --chown=quarkus:quarkus /build/target/quarkus-app/*.jar ./
+COPY --from=build --chown=quarkus:quarkus /build/target/quarkus-app/app/ ./app/
+COPY --from=build --chown=quarkus:quarkus /build/target/quarkus-app/quarkus/ ./quarkus/
 
 EXPOSE 8080
 
