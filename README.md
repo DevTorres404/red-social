@@ -19,15 +19,9 @@
 
 ## Usuarios de Prueba
 
-Para facilitar la evaluación, el sistema viene precargado con varios usuarios. **La contraseña de cada usuario es su propio nombre seguido de `123`** (ejemplo: `jean123`, `damian123`, `melanie123`).
+Para facilitar la evaluación, el sistema viene precargado con varios usuarios. **La contraseña de cada usuario es su propio nombre en minusculas seguido de `123`** (ejemplo: `jean123`, `damian123`, `melanie123`).
 
-| Usuario | Correo | Rol principal en el sistema |
-|---------|--------|-----------------------------|
-| `damian` | `damian@orbit.labtorres.me` | Admin / Postea contenido técnico |
-| `melanie` | `melanie@orbit.labtorres.me` | Postea imágenes y comenta |
-| `jean` | `jean@orbit.labtorres.me` | Usuario nuevo para pruebas de recomendación |
 
----
 
 ## Descripción del proyecto
 
