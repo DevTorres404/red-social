@@ -87,7 +87,7 @@ public class PostService {
         Post post = requirePostVisible(postId);
         if (post.mediaKey() == null || post.mediaKey().isBlank())
             throw new NotFoundException("Post has no image");
-        return mediaStorage.presignedReadUrl(post.mediaKey());
+        return mediaStorage.publicUrl(post.mediaKey());
     }
 
     public void delete(String postId) {
@@ -155,7 +155,7 @@ public class PostService {
         requirePostVisible(postId);
         Post.Comment comment = posts.findComment(postId, commentId, currentUser.id());
         if (comment.mediaKey().isBlank()) throw new NotFoundException("Comment has no image");
-        return mediaStorage.presignedReadUrl(comment.mediaKey());
+        return mediaStorage.publicUrl(comment.mediaKey());
     }
 
     public Post.Comment reactToComment(String postId, String commentId, CommentReactionRequest request) {

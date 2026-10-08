@@ -63,7 +63,7 @@ services:
         mc alias set local http://rustfs:9000 "$$RUSTFS_ACCESS_KEY" "$$RUSTFS_SECRET_KEY"
         mc mb --ignore-existing "local/$$RUSTFS_BUCKET"
         mc anonymous set none "local/$$RUSTFS_BUCKET"
-        mc anonymous set none "local/$$RUSTFS_BUCKET/posts"
+        mc anonymous set download "local/$$RUSTFS_BUCKET/posts"
         mc anonymous set download "local/$$RUSTFS_BUCKET/avatars"
     environment:
       RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:?Set RUSTFS_ACCESS_KEY in .env}
