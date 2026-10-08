@@ -65,7 +65,6 @@ export default function GraphPage() {
     loading,
     refreshing,
     followingId,
-    selectedNodeId,
     setSelectedNodeId,
     mapQuery,
     setMapQuery,

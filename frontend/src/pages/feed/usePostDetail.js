@@ -40,6 +40,7 @@ export function usePostDetail(id) {
     }
   }, [id]);
 
+  // eslint-disable-next-line react/set-state-in-effect
   useEffect(() => { fetchData(); }, [fetchData]);
 
   useEffect(() => {

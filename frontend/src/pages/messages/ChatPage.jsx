@@ -40,7 +40,6 @@ function ChatConversation({ userId, navigate }) {
     historyLoaded,
     search,
     setSearch,
-    searchResults,
     setSearchResults,
     searching,
     searchError,

@@ -20,6 +20,7 @@ export default function PostCard({ post, onDeleted, showAuthor = true }) {
 
   // Sync local like state when the parent re-renders with new props
   // (real-time like-changed events, feed reloads, etc.).
+  // eslint-disable-next-line react/set-state-in-effect
   useEffect(() => {
     setIsLiked(post.likedByCurrentUser || false);
     setLikesCount(post.likeCount || 0);
