@@ -8,7 +8,6 @@ import jakarta.validation.Valid;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
-import jakarta.ws.rs.HeaderParam;
 import jakarta.ws.rs.NotAuthorizedException;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
@@ -19,6 +18,8 @@ import jakarta.ws.rs.core.NewCookie;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
+
+import java.util.Locale;
 
 /**
  * Authentication REST endpoints.
@@ -50,8 +51,6 @@ public class AuthResource {
     private static final int REFRESH_COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30 days
     private static final String REFRESH_COOKIE_PATH = "/api/auth";
     private static final String LEGACY_REFRESH_COOKIE_PATH = "/api/auth/refresh";
-    private static final String CLIENT_IP_HEADER = "X-Forwarded-For";
-    private static final String LOCAL_CLIENT_KEY = "local";
 
     private NewCookie buildRefreshCookie(String token, boolean isLogout) {
         return new NewCookie.Builder(REFRESH_COOKIE_NAME)
@@ -100,13 +99,14 @@ public class AuthResource {
      * Validates credentials against Neo4j (bcrypt comparison) and returns a JWT.
      * Also sets the refresh token in an HttpOnly cookie.
      * Public endpoint: protegido contra fuerza bruta por ventana fija por
-     * cliente (primer valor de X-Forwarded-For; "local" si no viene).
+     * identificador. X-Forwarded-For no es una fuente fiable de identidad:
+     * un cliente puede falsificarlo incluso cuando nginx agrega su propia IP.
      */
     @POST
     @Path("/login")
     @Operation(summary = "Login with email or username and password")
-    public Response login(@Valid LoginRequest request, @HeaderParam(CLIENT_IP_HEADER) String forwardedFor) {
-        String key = clientKey(forwardedFor);
+    public Response login(@Valid LoginRequest request) {
+        String key = loginKey(request.identifier());
         if (!loginRateLimiter.allow(key)) {
             throw new WebApplicationException(
                     "Demasiados intentos de inicio de sesión. Intente de nuevo en unos minutos.",
@@ -125,16 +125,11 @@ public class AuthResource {
     }
 
     /**
-     * Primera dirección del X-Forwarded-For (el cliente real detrás de nginx)
-     * o "local" cuando la cabecera no está presente.
+     * Usa la misma clave para variantes triviales del mismo identificador.
+     * No incluye cabeceras controladas por el cliente.
      */
-    private static String clientKey(String forwardedFor) {
-        if (forwardedFor == null || forwardedFor.isBlank()) {
-            return LOCAL_CLIENT_KEY;
-        }
-        int comma = forwardedFor.indexOf(',');
-        String first = comma == -1 ? forwardedFor : forwardedFor.substring(0, comma);
-        return first.trim();
+    static String loginKey(String identifier) {
+        return "account:" + identifier.trim().toLowerCase(Locale.ROOT);
     }
 
     /**

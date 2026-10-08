@@ -2,11 +2,24 @@ package com.redsocial.auth;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LoginRateLimiterTest {
+
+    @Test
+    void loginKeyNormalizesIdentifierInsteadOfTrustingForwardedHeaders() {
+        String key = AuthResource.loginKey("  Alice@Example.com  ");
+        assertEquals("account:alice@example.com", key);
+        assertEquals(key, AuthResource.loginKey("alice@example.com"));
+
+        LoginRateLimiter limiter = new LoginRateLimiter(2, 900);
+        limiter.registerFailure(key);
+        limiter.registerFailure(AuthResource.loginKey("ALICE@example.com"));
+        assertFalse(limiter.allow(AuthResource.loginKey("alice@example.com")));
+    }
 
     @Test
     void allowsWhileFailuresStayBelowTheLimit() {

@@ -475,7 +475,7 @@ Resultados esperados:
 - `CurrentUser` extrae `sub` del JWT verificado (no confía en cliente)
 - Verificación de propiedad antes de mutaciones (post, conversación, suscripción)
 - Rate limiting en WebSocket (10 msg/10s)
-- `POST /api/auth/login` está limitado por IP (ventana fija, 10 intentos en 15 min por defecto) para mitigar fuerza bruta; configurable vía `APP_AUTH_LOGIN_MAX_ATTEMPTS` y `APP_AUTH_LOGIN_WINDOW_SECONDS`
+- `POST /api/auth/login` está limitado por identificador de cuenta normalizado (ventana fija, 10 fallos en 15 min por defecto) para evitar que una cabecera `X-Forwarded-For` falsificada eluda el límite; configurable vía `APP_AUTH_LOGIN_MAX_ATTEMPTS` y `APP_AUTH_LOGIN_WINDOW_SECONDS`. El contador reside en memoria de cada instancia y un tercero puede provocar un bloqueo temporal de un identificador conocido.
 - Validación de archivos: PNG/JPEG reales, ≤5 MiB, ≤16 MP, extension≡MIME
 
 ### Web Push — Validación de endpoints
@@ -493,7 +493,7 @@ Resultados esperados:
 services:
   neo4j:           # Graph DB + APOC
   rustfs:          # S3-compatible object storage
-  rustfs-init:     # Crea bucket + políticas (avatars/posts públicos de lectura)
+  rustfs-init:     # Crea bucket + políticas (solo avatars públicos; posts privados)
   backend:         # Quarkus JVM build (Dockerfile.jvm)
   frontend:        # Nginx + React build (multi-stage Dockerfile)
 ```
