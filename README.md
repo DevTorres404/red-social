@@ -17,6 +17,18 @@
 
 ---
 
+## Usuarios de Prueba
+
+Para facilitar la evaluación, el sistema viene precargado con los siguientes usuarios (todos tienen la contraseña `password`):
+
+| Usuario | Correo | Rol principal en el sistema |
+|---------|--------|-----------------------------|
+| `damian` | `damian@orbit.labtorres.me` | Admin / Postea contenido técnico |
+| `melanie` | `melanie@orbit.labtorres.me` | Postea imágenes y comenta |
+| `jean` | `jean@orbit.labtorres.me` | Usuario nuevo para pruebas de recomendación |
+
+---
+
 ## Descripción del proyecto
 
 **Orbit** es una red social distribuida construida como monolito modular en contenedores Docker. El backend (Quarkus + Java 21) expone una API REST y canales WebSocket, persiste el grafo social y los datos estructurados en **Neo4j**, almacena archivos multimedia en **RustFS (S3-compatible)**, y envía notificaciones **Web Push** mediante Service Workers.
