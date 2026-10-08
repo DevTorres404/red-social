@@ -19,7 +19,7 @@
 
 ## Usuarios de Prueba
 
-Para facilitar la evaluación, el sistema viene precargado con los siguientes usuarios (todos tienen la contraseña `password`):
+Para facilitar la evaluación, el sistema viene precargado con varios usuarios. **La contraseña de cada usuario es su propio nombre seguido de `123`** (ejemplo: `jean123`, `damian123`, `melanie123`).
 
 | Usuario | Correo | Rol principal en el sistema |
 |---------|--------|-----------------------------|
