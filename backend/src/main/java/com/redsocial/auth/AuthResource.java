@@ -6,6 +6,8 @@ import com.redsocial.auth.dto.RegisterRequest;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.annotation.security.RolesAllowed;
+import jakarta.ws.rs.core.Context;
+import io.vertx.core.http.HttpServerRequest;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.NotAuthorizedException;
@@ -46,6 +48,9 @@ public class AuthResource {
 
     @Inject
     LoginRateLimiter loginRateLimiter;
+
+    @Context
+    HttpServerRequest httpRequest;
 
     private static final String REFRESH_COOKIE_NAME = "rt";
     private static final int REFRESH_COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30 days
@@ -98,30 +103,45 @@ public class AuthResource {
      *
      * Validates credentials against Neo4j (bcrypt comparison) and returns a JWT.
      * Also sets the refresh token in an HttpOnly cookie.
-     * Public endpoint: protegido contra fuerza bruta por ventana fija por
-     * identificador. X-Forwarded-For no es una fuente fiable de identidad:
-     * un cliente puede falsificarlo incluso cuando nginx agrega su propia IP.
+     * Public endpoint: protegido contra fuerza bruta combinando ventana fija por
+     * identificador (usuario/email) y por IP del cliente, mitigando tanto fuerza 
+     * bruta directa como Password Spraying (ataque horizontal).
      */
     @POST
     @Path("/login")
     @Operation(summary = "Login with email or username and password")
     public Response login(@Valid LoginRequest request) {
-        String key = loginKey(request.identifier());
-        if (!loginRateLimiter.allow(key)) {
+        String identifierKey = loginKey(request.identifier());
+        String ipKey = "ip:" + getClientIp();
+
+        if (!loginRateLimiter.allow(identifierKey) || !loginRateLimiter.allow(ipKey)) {
             throw new WebApplicationException(
                     "Demasiados intentos de inicio de sesión. Intente de nuevo en unos minutos.",
                     Response.Status.TOO_MANY_REQUESTS);
         }
         try {
             AuthResult result = authService.login(request);
-            loginRateLimiter.onSuccess(key);
+            loginRateLimiter.onSuccess(identifierKey);
+            loginRateLimiter.onSuccess(ipKey);
             return Response.ok(result.response())
                     .cookie(buildRefreshCookie(result.rawRefreshToken(), false), clearLegacyRefreshCookie())
                     .build();
         } catch (NotAuthorizedException ex) {
-            loginRateLimiter.registerFailure(key);
+            loginRateLimiter.registerFailure(identifierKey);
+            loginRateLimiter.registerFailure(ipKey);
             throw ex;
         }
+    }
+
+    private String getClientIp() {
+        if (httpRequest == null) return "unknown";
+        // En producción detrás de Cloudflare, este es inyectado de forma segura.
+        String cf = httpRequest.getHeader("CF-Connecting-IP");
+        if (cf != null && !cf.isBlank()) return cf.trim();
+        // Fallback estándar a proxys genéricos.
+        String xff = httpRequest.getHeader("X-Forwarded-For");
+        if (xff != null && !xff.isBlank()) return xff.split(",")[0].trim();
+        return httpRequest.remoteAddress() != null ? httpRequest.remoteAddress().hostAddress() : "unknown";
     }
 
     /**
